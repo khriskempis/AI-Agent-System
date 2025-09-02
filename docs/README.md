@@ -20,6 +20,7 @@ Solutions for common issues:
 ### 🛠️ [Development](./development/)
 Development and configuration guides:
 
+- **[Docker Development Workflow](./development/DOCKER_DEVELOPMENT_WORKFLOW.md)** - Complete guide to Docker development and rebuild workflows
 - **[Daily Processing Modes](./development/DAILY_PROCESSING_MODES.md)** - Configure different processing schedules and modes
 - **[Testing Configurations](./development/TESTING_CONFIGURATIONS.md)** - How to test different workflow scenarios
 
@@ -47,6 +48,37 @@ Historical documents and planning materials:
 - **✅ Validation Agent**: Quality assurance and consistency checks
 
 ## 🎯 Quick Start
+
+### **🐳 Docker Setup (Recommended)**
+
+The fastest way to get everything running:
+
+```bash
+# Complete project setup
+cd "/Users/kkempis/Desktop/Coding Practice/MCP Server"
+./scripts/start-full-project.sh
+
+# Or silent startup
+./scripts/quick-start.sh
+```
+
+**✅ This automatically starts:**
+- **Main MCP Server** (stdio mode for direct MCP clients)
+- **HTTP API Server** (port 3001 for n8n agents) 
+- **n8n AI Platform** (port 5678 for workflows)
+
+**🌐 Access URLs:**
+- **n8n Platform**: http://localhost:5678
+- **MCP HTTP API**: http://localhost:3001
+
+### **🔧 Development Mode**
+
+For coding with hot reload:
+```bash
+./scripts/start-development.sh
+```
+
+### **📚 Manual Setup** 
 
 1. **Setup MCP Server**: Follow the [Notion Idea Server README](../notion-idea-server/README.md)
 2. **Configure n8n**: Use the [N8N Setup Guide](./setup/N8N_SETUP_GUIDE.md)
