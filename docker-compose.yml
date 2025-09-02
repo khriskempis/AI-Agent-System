@@ -1,0 +1,263 @@
+# MCP Servers Hub - Docker Compose Configuration
+# This file orchestrates all MCP servers in the hub
+
+services:
+  # Notion Idea Server
+  notion-idea-server:
+    build:
+      context: ./notion-idea-server
+      dockerfile: Dockerfile
+      target: production
+    container_name: mcp-notion-idea-server
+    restart: unless-stopped
+    
+    environment:
+      - NODE_ENV=production
+      - SERVER_NAME=notion-idea-server
+      - SERVER_VERSION=1.0.0
+    
+    env_file:
+      - ./notion-idea-server/.env
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    
+    # Health check disabled for MCP servers (they communicate via stdio)
+    # healthcheck:
+    #   test: ["CMD", "node", "-e", "console.log('Notion server healthy')"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 10s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Networks
+    networks:
+      - mcp-network
+    
+    # Labels for service discovery
+    labels:
+      - "mcp.server=notion-idea-server"
+      - "mcp.type=notion"
+      - "mcp.version=1.0.0"
+
+  # HTTP API wrapper for n8n integration
+  notion-idea-server-http:
+    build:
+      context: ./notion-idea-server
+      dockerfile: Dockerfile
+      target: production
+    container_name: mcp-notion-idea-server-http
+    restart: unless-stopped
+    
+    environment:
+      - NODE_ENV=production
+      - SERVER_NAME=notion-idea-server-http
+      - SERVER_VERSION=1.0.0
+    
+    env_file:
+      - ./notion-idea-server/.env
+    
+    # Expose HTTP port for n8n
+    ports:
+      - "3001:3001"
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    
+    # Override command to run HTTP wrapper
+    command: ["node", "dist/http-wrapper.js"]
+    
+    # Networks
+    networks:
+      - mcp-network
+    
+    # Labels for service discovery
+    labels:
+      - "mcp.server=notion-idea-server-http"
+      - "mcp.type=notion"
+      - "mcp.mode=http"
+      - "mcp.version=1.0.0"
+
+  # Development versions (using profiles)
+  notion-idea-server-dev:
+    build:
+      context: ./notion-idea-server
+      dockerfile: Dockerfile
+      target: builder
+    container_name: mcp-notion-idea-server-dev
+    restart: unless-stopped
+    
+    environment:
+      - NODE_ENV=development
+      - SERVER_NAME=notion-idea-server-dev
+    
+    env_file:
+      - ./notion-idea-server/.env
+    
+    volumes:
+      - ./notion-idea-server/src:/app/src:ro
+      - ./notion-idea-server/package.json:/app/package.json:ro
+      - ./notion-idea-server/tsconfig.json:/app/tsconfig.json:ro
+    
+    command: ["npm", "run", "dev"]
+    
+    networks:
+      - mcp-network
+    
+    labels:
+      - "mcp.server=notion-idea-server-dev"
+      - "mcp.type=notion"
+      - "mcp.environment=development"
+    
+    profiles:
+      - dev
+
+  # Development HTTP wrapper with hot reload
+  notion-idea-server-http-dev:
+    build:
+      context: ./notion-idea-server
+      dockerfile: Dockerfile
+      target: builder
+    container_name: mcp-notion-idea-server-http-dev
+    restart: unless-stopped
+    
+    environment:
+      - NODE_ENV=development
+      - SERVER_NAME=notion-idea-server-http-dev
+    
+    env_file:
+      - ./notion-idea-server/.env
+    
+    # Expose HTTP port for development testing
+    ports:
+      - "3001:3001"
+    
+    volumes:
+      - ./notion-idea-server/src:/app/src:ro
+      - ./notion-idea-server/package.json:/app/package.json:ro
+      - ./notion-idea-server/tsconfig.json:/app/tsconfig.json:ro
+    
+    # Run HTTP wrapper in development mode with hot reload
+    command: ["npm", "run", "http-dev"]
+    
+    networks:
+      - mcp-network
+    
+    labels:
+      - "mcp.server=notion-idea-server-http-dev"
+      - "mcp.type=notion"
+      - "mcp.mode=http"
+      - "mcp.environment=development"
+    
+    profiles:
+      - dev
+
+  # n8n Workflow Automation Platform
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n-server
+    restart: unless-stopped
+    
+    # Port mapping
+    ports:
+      - "5678:5678"
+    
+    # Environment variables
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=America/New_York
+    
+    # Persistent data storage
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.2'
+    
+    # Networks
+    networks:
+      - mcp-network
+    
+    # Labels for service discovery
+    labels:
+      - "app=n8n"
+      - "service=workflow-automation"
+      - "version=latest"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Template for future MCP servers
+  # Copy and modify this template when adding new servers
+  # 
+  # example-server:
+  #   build:
+  #     context: ./example-server
+  #     dockerfile: Dockerfile
+  #   container_name: mcp-example-server
+  #   restart: unless-stopped
+  #   
+  #   environment:
+  #     - NODE_ENV=production
+  #     - SERVER_NAME=example-server
+  #   
+  #   env_file:
+  #     - ./example-server/.env
+  #   
+  #   networks:
+  #     - mcp-network
+  #   
+  #   labels:
+  #     - "mcp.server=example-server"
+  #     - "mcp.type=example"
+
+# Shared network for all MCP servers
+networks:
+  mcp-network:
+    driver: bridge
+    name: mcp-servers-network
+
+# Shared volumes (if needed for future servers)
+volumes:
+  mcp-shared-data:
+    driver: local
+  n8n_data:
+    driver: local 

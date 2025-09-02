@@ -1,0 +1,220 @@
+{
+  "name": "Director Agent - Standalone Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "test-context",
+              "name": "testContext",
+              "value": {
+                "sessionId": "={{ $now.toISOString() }}",
+                "workflowType": "director_agent_test",
+                "startTime": "={{ new Date().toISOString() }}",
+                "analysisDate": "={{ new Date().toDateString() }}",
+                "agentsAvailable": ["notion", "planner", "validation"],
+                "currentPhase": "director_testing",
+                "taskRequest": "Test daily idea processing workflow"
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "setup-context",
+      "name": "Setup Test Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "options": {
+          "temperature": 0.3,
+          "maxTokensToSample": 3000
+        }
+      },
+      "id": "claude-model",
+      "name": "Claude Director Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [680, 500],
+      "credentials": {
+        "anthropicApi": {
+          "id": "1",
+          "name": "Anthropic Claude API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Task Request: {{ $json.testContext.taskRequest }}\n\nAnalyze this task and provide routing decision for our multi-agent system. Consider the available agents and their capabilities.",
+        "hasOutputParser": false,
+        "agent": "conversationalAgent",
+        "options": {
+          "systemMessage": "You are the Intelligent Director Agent - a **pure orchestrator** with no direct system access.\n\n# PURE ORCHESTRATION SYSTEM\n\n## Core Mission\nAnalyze task requirements and intelligently route work to specialized agents. You do NOT directly access data - you coordinate agents who do the actual work.\n\n## Available Specialized Agents:\n1. **Notion Agent**: \n   - Has all MCP tools for Notion database access\n   - Specializes in: idea retrieval, processing, categorization, multi-idea parsing\n   - Can: get_ideas, search_ideas, update_idea, get_idea_by_id\n\n2. **Planner Agent**: \n   - Has analytical tools for strategic planning\n   - Specializes in: task decomposition, execution strategies, project planning\n   - Can: analyze data provided by other agents\n\n3. **Validation Agent**: \n   - Has quality assurance tools\n   - Specializes in: consistency checks, error detection, result validation\n   - Can: verify work done by other agents\n\n## Your Role (Pure Coordinator):\n- **NO direct MCP tool access** - you coordinate, don't execute\n- **Analyze task requirements** from system context\n- **Make routing decisions** based on agent specializations\n- **Plan multi-agent workflows** when needed\n\n## Routing Output Format:\nYou MUST output your routing decision as a JSON object:\n```json\n{{\n  \"routingDecision\": {{\n    \"primaryAgent\": \"notion|planner|validation\",\n    \"taskDescription\": \"Detailed task for the agent to execute\",\n    \"reasoning\": \"Why this agent is optimal for this task\",\n    \"followUpAgent\": \"notion|planner|validation|none\",\n    \"followUpTask\": \"Task for follow-up agent if applicable\",\n    \"priority\": \"high|medium|low\",\n    \"estimatedComplexity\": \"simple|moderate|complex\"\n  }},\n  \"contextUpdate\": {{\n    \"currentPhase\": \"agent_coordination\",\n    \"nextSteps\": \"What should happen after agent execution\"\n  }}\n}}\n```\n\n## Daily Processing Routing Strategy:\n- **Primary Task**: Daily idea processing workflow\n- **Route to Notion Agent**: \"Check for 'Not Started' ideas from today (daysBack=1), process and categorize them using multi-idea parsing methodology\"\n- **Reasoning**: Notion Agent has the tools and expertise for idea database operations\n- **Follow-up**: Route to Validation Agent if quality checks needed\n\n**You are a smart coordinator who routes work to capable agents. Always output routing decisions in the specified JSON format.**",
+          "maxIterations": 10
+        }
+      },
+      "id": "director-agent",
+      "name": "Director Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and Validate Director's Routing Decision\nconst directorOutput = $json;\nconst testContext = $('Setup Test Context').first().json.testContext;\n\n// Extract output text\nconst outputText = directorOutput.output || directorOutput.text || JSON.stringify(directorOutput) || '';\n\n// Parse routing decision\nlet routingDecision;\nlet parseSuccess = false;\n\ntry {\n  // Look for JSON in the output\n  const jsonMatch = outputText.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    routingDecision = JSON.parse(jsonMatch[0]);\n    parseSuccess = true;\n  } else {\n    throw new Error('No JSON found in output');\n  }\n} catch (error) {\n  parseSuccess = false;\n  routingDecision = {\n    error: error.message,\n    rawOutput: outputText\n  };\n}\n\n// Validate routing decision structure\nlet validationResults = {\n  hasRoutingDecision: !!routingDecision.routingDecision,\n  hasContextUpdate: !!routingDecision.contextUpdate,\n  hasRequiredFields: false,\n  missingFields: []\n};\n\nif (routingDecision.routingDecision) {\n  const required = ['primaryAgent', 'taskDescription', 'reasoning', 'priority', 'estimatedComplexity'];\n  const missing = required.filter(field => !routingDecision.routingDecision[field]);\n  \n  validationResults.hasRequiredFields = missing.length === 0;\n  validationResults.missingFields = missing;\n}\n\n// Create test results\nconst testResults = {\n  timestamp: new Date().toISOString(),\n  testType: 'Director Agent Standalone',\n  parseSuccess,\n  validationResults,\n  routingDecision,\n  originalOutput: outputText,\n  testContext,\n  summary: {\n    status: parseSuccess && validationResults.hasRequiredFields ? 'PASSED' : 'FAILED',\n    primaryAgent: routingDecision.routingDecision?.primaryAgent || 'UNKNOWN',\n    reasoning: routingDecision.routingDecision?.reasoning || 'NO REASONING PROVIDED'\n  }\n};\n\nreturn [testResults];"
+      },
+      "id": "parse-results",
+      "name": "Parse & Validate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.summary.status }}",
+              "rightValue": "PASSED"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "test-result-switch",
+      "name": "Test Result Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// SUCCESS: Director Agent Test Passed\nconst results = $json;\n\nreturn [{\n  status: 'SUCCESS',\n  message: '✅ Director Agent Test PASSED',\n  details: {\n    primaryAgent: results.summary.primaryAgent,\n    reasoning: results.summary.reasoning,\n    hasValidJSON: results.parseSuccess,\n    hasRequiredFields: results.validationResults.hasRequiredFields\n  },\n  routingDecision: results.routingDecision,\n  timestamp: results.timestamp,\n  nextSteps: [\n    'Director Agent is working correctly',\n    'Ready to test with other agents',\n    'Can be integrated into main workflow'\n  ]\n}];"
+      },
+      "id": "success-output",
+      "name": "✅ Test Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// FAILURE: Director Agent Test Failed\nconst results = $json;\n\nreturn [{\n  status: 'FAILURE',\n  message: '❌ Director Agent Test FAILED',\n  details: {\n    parseSuccess: results.parseSuccess,\n    validationResults: results.validationResults,\n    error: results.routingDecision.error || 'Unknown error',\n    rawOutput: results.originalOutput\n  },\n  troubleshooting: [\n    'Check if Director Agent is producing valid JSON',\n    'Verify all required fields are present',\n    'Review system message formatting',\n    'Check for template syntax errors'\n  ],\n  timestamp: results.timestamp\n}];"
+      },
+      "id": "failure-output",
+      "name": "❌ Test Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 400]
+    }
+  ],
+  "connections": {
+    "Manual Test Trigger": {
+      "main": [
+        [
+          {
+            "node": "Setup Test Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup Test Context": {
+      "main": [
+        [
+          {
+            "node": "Director Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Director Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Director Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Director Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse & Validate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Validate Results": {
+      "main": [
+        [
+          {
+            "node": "Test Result Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Result Switch": {
+      "main": [
+        [
+          {
+            "node": "✅ Test Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "❌ Test Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-15T09:00:00.000Z",
+  "versionId": "test-director-v1"
+} 

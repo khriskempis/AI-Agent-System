@@ -1,0 +1,331 @@
+{
+  "name": "Validation Agent - Standalone Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "test-context",
+              "name": "testContext",
+              "value": {
+                "sessionId": "={{ $now.toISOString() }}",
+                "workflowType": "validation_agent_test",
+                "startTime": "={{ new Date().toISOString() }}",
+                "agentType": "validation",
+                "taskDescription": "Validate recent idea processing results and check for consistency, completeness, and quality issues",
+                "testData": "Sample data: 15 ideas processed, 12 categorized as Project, 2 as Journal, 1 as General. Status updates: 8 moved to In Progress, 7 marked Done."
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "setup-context",
+      "name": "Setup Test Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get ideas for validation analysis - returns ideas with status, content, tags for quality assurance checks",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas?limit={limit}&filter={filter}&status={status}&daysBack={daysBack}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "limit",
+              "description": "Number of ideas to retrieve for validation analysis"
+            },
+            {
+              "name": "filter",
+              "description": "Optional text search filter for validation-related content"
+            },
+            {
+              "name": "status",
+              "description": "Status filter for validation: 'Not Started', 'In Progress', 'Done'"
+            },
+            {
+              "name": "daysBack",
+              "description": "Time range for validation analysis (days)"
+            }
+          ]
+        }
+      },
+      "id": "validation-get-ideas",
+      "name": "Validation Get Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [700, 200]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get specific idea for detailed validation - returns full idea content for quality checks",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "idea_id",
+              "description": "ID of the specific idea to validate"
+            }
+          ]
+        }
+      },
+      "id": "validation-get-idea-by-id",
+      "name": "Validation Get Idea By ID",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search ideas for validation patterns - finds issues, inconsistencies, or quality problems",
+        "method": "POST",
+        "url": "http://host.docker.internal:3001/api/ideas/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"{query}\",\n  \"limit\": {limit}\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "query",
+              "description": "Search query for validation and quality checks"
+            },
+            {
+              "name": "limit",
+              "description": "Number of validation-related results to return"
+            }
+          ]
+        }
+      },
+      "id": "validation-search-ideas",
+      "name": "Validation Search Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [700, 400]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "options": {
+          "temperature": 0.2,
+          "maxTokensToSample": 3500
+        }
+      },
+      "id": "claude-model",
+      "name": "Claude Validation Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [680, 600],
+      "credentials": {
+        "anthropicApi": {
+          "id": "1",
+          "name": "Anthropic Claude API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Task: {{ $json.testContext.taskDescription }}\n\nData to validate: {{ $json.testContext.testData }}\n\nUse your validation tools to perform quality assurance checks and identify any issues.",
+        "hasOutputParser": false,
+        "agent": "toolsAgent",
+        "options": {
+          "systemMessage": "You are the Validation Agent - the specialist for quality assurance, consistency checks, and error detection.\n\n# VALIDATION AGENT SPECIALIZATION\n\n## Core Mission\nEnsure data quality, identify inconsistencies, detect errors, and validate that processing meets standards and requirements.\n\n## Your Validation Tools:\n1. **get_ideas**: Retrieve ideas for validation analysis and quality checks\n2. **get_idea_by_id**: Deep validation of specific ideas for quality issues\n3. **search_ideas**: Find patterns, inconsistencies, or validation issues\n\n## Validation Methodologies:\n\n### Data Quality Checks:\n1. **Completeness**: Verify all required fields are populated\n2. **Consistency**: Check for contradictions or mismatched information\n3. **Accuracy**: Validate data correctness and appropriate categorization\n4. **Integrity**: Ensure relationships and dependencies are maintained\n\n### Processing Validation:\n1. **Status Workflow**: Verify proper status transitions (Not Started → In Progress → Done)\n2. **Categorization Logic**: Check appropriate table assignments (Project, Journal, General)\n3. **Multi-Idea Parsing**: Validate proper separation and grouping of ideas\n4. **Tag Assignment**: Verify relevant and accurate tag applications\n\n### Quality Assurance Standards:\n1. **Content Standards**: Check for meaningful, actionable content\n2. **Formatting Consistency**: Ensure uniform structure and presentation\n3. **Duplicate Detection**: Identify potential duplicate or redundant entries\n4. **Completeness Metrics**: Measure processing coverage and thoroughness\n\n## Validation Output Format:\nProvide structured validation reports with:\n- **Quality Summary**: Overall health score and key metrics\n- **Issues Identified**: Specific problems found with severity levels\n- **Consistency Checks**: Data integrity and relationship validation\n- **Completeness Assessment**: Coverage analysis and gaps\n- **Recommendations**: Specific actions to address issues\n- **Risk Assessment**: Impact of identified problems\n\n## Validation Instructions:\n1. **Systematic Analysis**: Use tools to gather comprehensive validation data\n2. **Pattern Recognition**: Look for systematic issues or recurring problems\n3. **Standards Compliance**: Check against established quality criteria\n4. **Risk Evaluation**: Assess impact and urgency of identified issues\n5. **Actionable Feedback**: Provide specific recommendations for improvement\n\n## Quality Metrics:\n- **Processing Coverage**: % of ideas properly processed\n- **Categorization Accuracy**: Correct table assignments\n- **Status Consistency**: Proper workflow adherence\n- **Content Quality**: Meaningful and actionable content\n- **Error Rate**: Frequency of issues identified\n\n**Focus on thorough validation while providing actionable feedback for quality improvement.**",
+          "maxIterations": 12
+        }
+      },
+      "id": "validation-agent",
+      "name": "Validation Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze Validation Agent Test Results\nconst validationOutput = $json;\nconst testContext = $('Setup Test Context').first().json.testContext;\n\n// Extract output text\nconst outputText = validationOutput.output || validationOutput.text || JSON.stringify(validationOutput) || '';\n\n// Analyze validation capabilities\nconst validationAnalysis = {\n  hasQualitySummary: outputText.toLowerCase().includes('quality') || outputText.toLowerCase().includes('summary'),\n  hasIssuesIdentified: outputText.toLowerCase().includes('issue') || outputText.toLowerCase().includes('problem'),\n  hasConsistencyChecks: outputText.toLowerCase().includes('consistency') || outputText.toLowerCase().includes('check'),\n  hasCompletenessAssessment: outputText.toLowerCase().includes('complete') || outputText.toLowerCase().includes('coverage'),\n  hasRecommendations: outputText.toLowerCase().includes('recommend') || outputText.toLowerCase().includes('suggest'),\n  hasRiskAssessment: outputText.toLowerCase().includes('risk') || outputText.toLowerCase().includes('impact'),\n  usedValidationTools: outputText.includes('get_ideas') || outputText.includes('search_ideas') || outputText.includes('get_idea_by_id'),\n  hasMetrics: outputText.includes('%') || outputText.toLowerCase().includes('metric') || outputText.toLowerCase().includes('score'),\n  demonstratesValidation: outputText.toLowerCase().includes('valid') || outputText.toLowerCase().includes('error') || outputText.toLowerCase().includes('quality')\n};\n\n// Calculate validation score\nconst validationElements = Object.values(validationAnalysis).filter(Boolean).length;\nconst maxElements = Object.keys(validationAnalysis).length;\nconst validationScore = (validationElements / maxElements) * 100;\n\n// Assess validation quality\nconst qualityMetrics = {\n  outputLength: outputText.length,\n  hasDetailedAnalysis: outputText.length > 400,\n  hasSpecificFindings: outputText.toLowerCase().includes('found') || outputText.toLowerCase().includes('detected'),\n  showsValidationExpertise: outputText.toLowerCase().includes('standards') || outputText.toLowerCase().includes('criteria'),\n  hasActionableInsights: outputText.toLowerCase().includes('action') || outputText.toLowerCase().includes('fix')\n};\n\nconst testResults = {\n  timestamp: new Date().toISOString(),\n  testType: 'Validation Agent Standalone',\n  testContext,\n  validationAnalysis,\n  qualityMetrics,\n  outputText,\n  summary: {\n    status: validationScore >= 65 && qualityMetrics.hasDetailedAnalysis ? 'PASSED' : 'FAILED',\n    validationScore: Math.round(validationScore),\n    elementsPresent: validationElements + '/' + maxElements,\n    hasValidationExpertise: validationAnalysis.demonstratesValidation && qualityMetrics.showsValidationExpertise\n  }\n};\n\nreturn [testResults];"
+      },
+      "id": "analyze-results",
+      "name": "Analyze Validation Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.summary.status }}",
+              "rightValue": "PASSED"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "test-result-switch",
+      "name": "Test Result Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// SUCCESS: Validation Agent Test Passed\nconst results = $json;\n\nreturn [{\n  status: 'SUCCESS',\n  message: '✅ Validation Agent Test PASSED',\n  details: {\n    validationScore: results.summary.validationScore + '%',\n    elementsPresent: results.summary.elementsPresent,\n    hasValidationExpertise: results.summary.hasValidationExpertise,\n    outputLength: results.qualityMetrics.outputLength + ' characters'\n  },\n  strengths: [\n    results.validationAnalysis.hasQualitySummary ? 'Provides quality summaries' : null,\n    results.validationAnalysis.hasIssuesIdentified ? 'Identifies specific issues' : null,\n    results.validationAnalysis.hasConsistencyChecks ? 'Performs consistency validation' : null,\n    results.validationAnalysis.hasRecommendations ? 'Offers actionable recommendations' : null,\n    results.validationAnalysis.usedValidationTools ? 'Uses validation tools effectively' : null,\n    results.qualityMetrics.hasSpecificFindings ? 'Provides specific findings' : null\n  ].filter(Boolean),\n  validationCapabilities: {\n    qualityAssurance: results.validationAnalysis.hasQualitySummary,\n    issueDetection: results.validationAnalysis.hasIssuesIdentified,\n    toolUsage: results.validationAnalysis.usedValidationTools,\n    expertiseLevel: results.summary.hasValidationExpertise,\n    comprehensiveAnalysis: results.summary.validationScore >= 80\n  },\n  nextSteps: [\n    'Validation Agent demonstrates QA capabilities',\n    'Ready to receive validation tasks from Director',\n    'Can provide quality assurance for other agents' + String.fromCharCode(39) + ' work'\n  ],\n  timestamp: results.timestamp\n}];"
+      },
+      "id": "success-output",
+      "name": "✅ Test Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// FAILURE: Validation Agent Test Failed\nconst results = $json;\n\nreturn [{\n  status: 'FAILURE',\n  message: '❌ Validation Agent Test FAILED',\n  details: {\n    validationScore: results.summary.validationScore + '%',\n    elementsPresent: results.summary.elementsPresent,\n    hasValidationExpertise: results.summary.hasValidationExpertise,\n    outputLength: results.qualityMetrics.outputLength + ' characters'\n  },\n  issues: [\n    results.summary.validationScore < 40 ? 'Very low validation capability score' : null,\n    !results.qualityMetrics.hasDetailedAnalysis ? 'Output too brief for validation analysis' : null,\n    !results.validationAnalysis.demonstratesValidation ? 'Lacks validation expertise focus' : null,\n    !results.validationAnalysis.hasIssuesIdentified ? 'No issues or problems identified' : null,\n    !results.validationAnalysis.usedValidationTools ? 'Did not use validation tools effectively' : null\n  ].filter(Boolean),\n  missingElements: [\n    !results.validationAnalysis.hasQualitySummary ? 'Quality Summary' : null,\n    !results.validationAnalysis.hasConsistencyChecks ? 'Consistency Checks' : null,\n    !results.validationAnalysis.hasCompletenessAssessment ? 'Completeness Assessment' : null,\n    !results.validationAnalysis.hasRecommendations ? 'Recommendations' : null,\n    !results.validationAnalysis.hasRiskAssessment ? 'Risk Assessment' : null,\n    !results.validationAnalysis.hasMetrics ? 'Quality Metrics' : null\n  ].filter(Boolean),\n  troubleshooting: [\n    'Review Validation Agent system message for quality assurance focus',\n    'Check if agent understands validation methodology',\n    'Verify validation tools are accessible and functional',\n    'Test with more specific validation scenarios',\n    'Consider lowering temperature for more systematic analysis',\n    'Ensure agent has examples of quality issues to identify'\n  ],\n  timestamp: results.timestamp\n}];"
+      },
+      "id": "failure-output",
+      "name": "❌ Test Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 400]
+    }
+  ],
+  "connections": {
+    "Manual Test Trigger": {
+      "main": [
+        [
+          {
+            "node": "Setup Test Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup Test Context": {
+      "main": [
+        [
+          {
+            "node": "Validation Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Get Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Validation Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Get Idea By ID": {
+      "ai_tool": [
+        [
+          {
+            "node": "Validation Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Search Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Validation Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Validation Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Validation Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Agent": {
+      "main": [
+        [
+          {
+            "node": "Analyze Validation Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Validation Results": {
+      "main": [
+        [
+          {
+            "node": "Test Result Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Result Switch": {
+      "main": [
+        [
+          {
+            "node": "✅ Test Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "❌ Test Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-15T09:00:00.000Z",
+  "versionId": "test-validation-v1"
+} 

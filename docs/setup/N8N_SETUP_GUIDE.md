@@ -1,0 +1,247 @@
+# n8n + MCP Server Integration Guide
+
+## 🎯 Overview
+
+This guide sets up an automated n8n workflow that:
+- **Runs daily at 9 AM** (configurable)
+- **Connects to your MCP server** via HTTP API
+- **Retrieves your Notion ideas** through the MCP bridge
+- **Sends them to an AI agent** for analysis
+- **Generates actionable reports** and insights
+
+## 📋 Prerequisites
+
+### ✅ What You Have Ready:
+- ✅ **MCP Server running** (notion-idea-server)
+- ✅ **HTTP API wrapper** running on port 3001
+- ✅ **Notion integration** configured with your ideas database
+
+### 🔧 What You Need to Install:
+1. **n8n** (workflow automation)
+2. **AI API access** (OpenAI, Anthropic, or similar)
+
+---
+
+## 🚀 Step-by-Step Setup
+
+### **Step 1: Install n8n**
+
+#### Option A: Docker (Recommended)
+```bash
+# Run n8n in Docker
+docker run -it --rm \
+  --name n8n \
+  -p 5678:5678 \
+  -v ~/.n8n:/home/node/.n8n \
+  n8nio/n8n
+
+# Access n8n at: http://localhost:5678
+```
+
+#### Option B: npm Installation
+```bash
+npm install n8n -g
+n8n start
+```
+
+### **Step 2: Import the Workflow**
+
+1. **Open n8n**: Navigate to http://localhost:5678
+2. **Create New Workflow**: Click "+" to create new workflow
+3. **Import Workflow**: 
+   - Click the "..." menu → "Import from file"
+   - Select the `n8n-notion-ideas-workflow.json` file
+   - Click "Import"
+
+### **Step 3: Configure API Credentials**
+
+#### **For OpenAI (Recommended)**
+1. **Get OpenAI API Key**: https://platform.openai.com/api-keys
+2. **In n8n**: Go to "Credentials" → "Create New"
+3. **Select**: "Header Auth"
+4. **Configure**:
+   - **Name**: "OpenAI API Key"
+   - **Header Name**: "Authorization"
+   - **Value**: "Bearer YOUR_OPENAI_API_KEY"
+
+#### **Alternative AI Services**
+You can also use:
+- **Anthropic Claude**: Modify the "Send to AI" node
+- **Local AI models**: Update the endpoint URL
+- **Azure OpenAI**: Change the API endpoint
+
+### **Step 4: Update Workflow URLs**
+
+In the workflow, update these URLs if needed:
+- **Health Check**: `http://localhost:3001/health`
+- **Get Ideas**: `http://localhost:3001/api/ideas`
+
+If your MCP server is on a different host/port, update accordingly.
+
+### **Step 5: Customize the Schedule**
+
+The default trigger is **9 AM daily**. To change:
+1. **Click the "Daily Trigger" node**
+2. **Modify the Cron Expression**:
+   - `0 9 * * *` = 9 AM daily
+   - `0 18 * * *` = 6 PM daily  
+   - `0 12 * * 1` = Noon every Monday
+   - `0 9 * * 1,3,5` = 9 AM on Mon, Wed, Fri
+
+### **Step 6: Test the Workflow**
+
+1. **Manual Test**: Click "Execute Workflow" button
+2. **Check Each Node**: Verify data flows correctly
+3. **Review Output**: Check the analysis report
+
+---
+
+## 🔧 Workflow Components Explained
+
+### **Node 1: Daily Trigger (9 AM)**
+- **Type**: Cron Trigger
+- **Purpose**: Starts the workflow at scheduled time
+- **Customizable**: Change time/frequency as needed
+
+### **Node 2: Check MCP API Health**
+- **Type**: HTTP Request (GET)
+- **URL**: `http://localhost:3001/health`
+- **Purpose**: Ensures MCP server is running before proceeding
+
+### **Node 3: Get All Ideas**
+- **Type**: HTTP Request (GET)
+- **URL**: `http://localhost:3001/api/ideas?limit=50`
+- **Purpose**: Fetches your Notion ideas via MCP server
+
+### **Node 4: Process Ideas for AI**
+- **Type**: Code (JavaScript)
+- **Purpose**: 
+  - Filters and categorizes ideas
+  - Analyzes recent activity
+  - Identifies actionable items
+  - Creates structured AI prompt
+
+### **Node 5: Send to AI (OpenAI)**
+- **Type**: HTTP Request (POST)
+- **URL**: `https://api.openai.com/v1/chat/completions`
+- **Purpose**: Sends processed data to AI for analysis
+
+### **Node 6: Process AI Response**
+- **Type**: Code (JavaScript)
+- **Purpose**: Formats AI analysis into readable report
+
+### **Node 7: Save Analysis Report**
+- **Type**: Files
+- **Purpose**: Saves report to log file (customizable output)
+
+---
+
+## 📊 Sample Output
+
+The workflow generates reports like this:
+
+```
+🧠 Daily Notion Ideas Analysis Report
+📅 Monday, July 28, 2025
+
+📊 SUMMARY:
+• Total Ideas: 23
+• Recent Activity: 5 ideas
+• Actionable Items: 8 ideas
+
+🤖 AI INSIGHTS:
+Based on your idea collection, I notice several promising patterns:
+
+1. **Priority Recommendations**:
+   - Focus on the "Product Feature X" idea - it has detailed content and clear next steps
+   - "Marketing Strategy Y" shows potential for immediate implementation
+
+2. **Pattern Analysis**:
+   - 60% of your ideas are in early conceptual stage
+   - Strong focus on productivity and automation themes
+   - Recent activity shows increased interest in AI integration
+
+3. **Action Items**:
+   - Consolidate 3 similar productivity ideas into one comprehensive plan
+   - Schedule development time for the 2 "In Progress" ideas
+   - Research competitors for the marketing-related concepts
+
+4. **Organization Suggestions**:
+   - Create status categories: "Research", "Plan", "Build", "Launch"
+   - Add priority tags: "High", "Medium", "Low"
+   - Group related ideas by theme (productivity, marketing, etc.)
+
+---
+Generated by n8n + MCP Server integration
+```
+
+---
+
+## 🔄 Extending the Workflow
+
+### **Add Notifications**
+- **Slack**: Add Slack node to send reports to team channels
+- **Email**: Use Email node to send daily summaries
+- **Discord**: Post insights to Discord channels
+
+### **Update Ideas Based on AI Analysis**
+- Add HTTP PUT requests to update idea statuses
+- Automatically tag ideas based on AI recommendations
+- Create new ideas from AI suggestions
+
+### **Multiple MCP Servers**
+- Add parallel branches for different Notion databases
+- Combine insights from multiple sources
+- Cross-reference ideas across databases
+
+### **Advanced AI Integration**
+- Use different AI models for different analysis types
+- Chain multiple AI calls for deeper insights
+- Implement feedback loops for continuous improvement
+
+---
+
+## 🛠️ Troubleshooting
+
+### **Common Issues**
+
+#### **1. Workflow Won't Start**
+- **Check**: MCP server is running (`./scripts/manage-hub.sh status`)
+- **Check**: HTTP API accessible (`curl http://localhost:3001/health`)
+- **Fix**: Restart MCP server if needed
+
+#### **2. API Credentials Error**
+- **Check**: OpenAI API key is valid and has credits
+- **Check**: Header Auth credential is properly configured
+- **Fix**: Update credentials in n8n
+
+#### **3. No Ideas Retrieved**
+- **Check**: Notion integration has database access
+- **Check**: Database ID is correct in `.env` file
+- **Fix**: Verify Notion permissions and credentials
+
+#### **4. Workflow Execution Fails**
+- **Check**: n8n execution logs for specific errors
+- **Check**: MCP server logs (`./scripts/manage-hub.sh logs notion-idea-server-http`)
+- **Fix**: Address specific error messages
+
+---
+
+## 🎯 Next Steps
+
+1. **Set up the basic workflow** following this guide
+2. **Run a test execution** to verify everything works
+3. **Customize the AI prompts** for your specific needs
+4. **Add additional output options** (Slack, email, etc.)
+5. **Expand to multiple MCP servers** for other Notion databases
+
+This integration provides a foundation for automated AI-powered analysis of your ideas, with room for extensive customization and expansion!
+
+---
+
+## 📚 Additional Resources
+
+- **n8n Documentation**: https://docs.n8n.io/
+- **OpenAI API Docs**: https://platform.openai.com/docs/
+- **Cron Expression Generator**: https://crontab.guru/
+- **MCP Protocol Specification**: https://spec.modelcontextprotocol.io/ 

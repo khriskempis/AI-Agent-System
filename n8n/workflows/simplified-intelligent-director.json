@@ -1,0 +1,883 @@
+{
+  "name": "Simplified Intelligent Director System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "1",
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "system-context",
+              "name": "systemContext",
+              "value": {
+                "sessionId": "={{ $now.toISOString() }}",
+                "workflowType": "intelligent_director_system",
+                "startTime": "={{ new Date().toISOString() }}",
+                "analysisDate": "={{ new Date().toDateString() }}",
+                "agentsAvailable": ["notion", "planner", "validation"],
+                "sharedData": {},
+                "executionHistory": [],
+                "currentPhase": "initialization",
+                "iteration": 1
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2",
+      "name": "Initialize Shared Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "options": {
+          "temperature": 0.3,
+          "maxTokensToSample": 3000
+        }
+      },
+      "id": "4",
+      "name": "Claude Director Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [680, 600],
+      "credentials": {
+        "anthropicApi": {
+          "id": "1",
+          "name": "Anthropic Claude API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Analyze the current system context and determine the optimal routing strategy for today's workflow execution. Focus on daily idea processing - route appropriate agents to handle unprocessed ideas from today.",
+        "hasOutputParser": false,
+        "agent": "conversationalAgent",
+        "options": {
+          "systemMessage": "You are the Intelligent Director Agent - a **pure orchestrator** with no direct system access.\n\n# PURE ORCHESTRATION SYSTEM\n\n## Core Mission\nAnalyze task requirements and intelligently route work to specialized agents. You do NOT directly access data - you coordinate agents who do the actual work.\n\n## Available Specialized Agents:\n1. **Notion Agent**: \n   - Has all MCP tools for Notion database access\n   - Specializes in: idea retrieval, processing, categorization, multi-idea parsing\n   - Can: get_ideas, search_ideas, update_idea, get_idea_by_id\n\n2. **Planner Agent**: \n   - Has analytical tools for strategic planning\n   - Specializes in: task decomposition, execution strategies, project planning\n   - Can: analyze data provided by other agents\n\n3. **Validation Agent**: \n   - Has quality assurance tools\n   - Specializes in: consistency checks, error detection, result validation\n   - Can: verify work done by other agents\n\n## Your Role (Pure Coordinator):\n- **NO direct MCP tool access** - you coordinate, don't execute\n- **Analyze task requirements** from system context\n- **Make routing decisions** based on agent specializations\n- **Plan multi-agent workflows** when needed\n\n## Routing Output Format:\nYou MUST output your routing decision as a JSON object:\n```json\n{{\n  \"routingDecision\": {{\n    \"primaryAgent\": \"notion|planner|validation\",\n    \"taskDescription\": \"Detailed task for the agent to execute\",\n    \"reasoning\": \"Why this agent is optimal for this task\",\n    \"followUpAgent\": \"notion|planner|validation|none\",\n    \"followUpTask\": \"Task for follow-up agent if applicable\",\n    \"priority\": \"high|medium|low\",\n    \"estimatedComplexity\": \"simple|moderate|complex\"\n  }},\n  \"contextUpdate\": {{\n    \"currentPhase\": \"agent_coordination\",\n    \"nextSteps\": \"What should happen after agent execution\"\n  }}\n}}\n```\n\n## Daily Processing Routing Strategy:\n- **Primary Task**: Daily idea processing workflow\n- **Route to Notion Agent**: \"Check for 'Not Started' ideas from today (daysBack=1), process and categorize them using multi-idea parsing methodology\"\n- **Reasoning**: Notion Agent has the tools and expertise for idea database operations\n- **Follow-up**: Route to Validation Agent if quality checks needed\n\n## Smart Routing Examples:\n- **Daily Processing**: → Notion Agent (has get_ideas tools)\n- **Complex Analysis Needed**: → Notion Agent → Planner Agent → Validation Agent\n- **Quality Issues**: → Validation Agent (has validation tools)\n- **Strategic Planning**: → Planner Agent (has analytical capabilities)\n\n## Coordination Principles:\n1. **Agent Specialization**: Route based on agent capabilities, not your preferences\n2. **Tool Access**: Only specialized agents have MCP tools - route accordingly\n3. **Workflow Efficiency**: Plan multi-step routing when one agent's output feeds another\n4. **Context Awareness**: Use shared context to make informed routing decisions\n\n**You are a smart coordinator who routes work to capable agents. Always output routing decisions in the specified JSON format.**",
+          "maxIterations": 10
+        }
+      },
+      "id": "5",
+      "name": "Intelligent Director Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Director's Routing Decision\nconst directorOutput = $json;\nconst systemContext = $('Initialize Shared Context').first().json.systemContext;\n\n// Extract output text first (move outside try block to fix scope)\nconst outputText = directorOutput.output || directorOutput.text || JSON.stringify(directorOutput) || '';\n\n// Extract routing decision from director output\nlet routingDecision;\ntry {\n  // Look for JSON in the output\n  const jsonMatch = outputText.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    routingDecision = JSON.parse(jsonMatch[0]);\n  } else {\n    // Fallback parsing if no clear JSON found\n    routingDecision = {\n      routingDecision: {\n        primaryAgent: 'notion',\n        taskDescription: 'Process unprocessed ideas using standard methodology',\n        reasoning: 'Default routing - process ideas',\n        followUpAgent: 'validation',\n        followUpTask: 'Validate processing results',\n        priority: 'medium',\n        estimatedComplexity: 'moderate'\n      },\n      contextUpdate: {\n        currentPhase: 'agent_execution',\n        nextSteps: 'Execute agent tasks and consolidate results'\n      }\n    };\n  }\n} catch (error) {\n  // Error fallback\n  routingDecision = {\n    routingDecision: {\n      primaryAgent: 'notion',\n      taskDescription: 'Process current ideas in database',\n      reasoning: 'Fallback routing due to parsing error: ' + error.message,\n      followUpAgent: 'none',\n      followUpTask: '',\n      priority: 'medium',\n      estimatedComplexity: 'simple'\n    },\n    contextUpdate: {\n      currentPhase: 'error_recovery',\n      nextSteps: 'Execute basic processing'\n    }\n  };\n}\n\n// Update shared context with routing decision\nsystemContext.executionHistory.push({\n  iteration: systemContext.iteration,\n  timestamp: new Date().toISOString(),\n  directorDecision: routingDecision.routingDecision,\n  phase: routingDecision.contextUpdate.currentPhase\n});\n\nsystemContext.currentPhase = routingDecision.contextUpdate.currentPhase;\nsystemContext.currentRouting = routingDecision.routingDecision;\n\n// Prepare agent task\nconst agentTask = {\n  agentType: routingDecision.routingDecision.primaryAgent,\n  taskDescription: routingDecision.routingDecision.taskDescription,\n  reasoning: routingDecision.routingDecision.reasoning,\n  priority: routingDecision.routingDecision.priority,\n  complexity: routingDecision.routingDecision.estimatedComplexity,\n  systemContext: systemContext,\n  timestamp: new Date().toISOString()\n};\n\nreturn [{\n  agentTask,\n  systemContext,\n  routingDecision: routingDecision.routingDecision,\n  directorAnalysis: outputText\n}];"
+      },
+      "id": "6",
+      "name": "Parse Routing Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "notion",
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.agentTask.agentType }}",
+                    "rightValue": "notion"
+                  }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "planner",
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.agentTask.agentType }}",
+                    "rightValue": "planner"
+                  }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "validation",
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.agentTask.agentType }}",
+                    "rightValue": "validation"
+                  }
+                ]
+              },
+              "renameOutput": true
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "7",
+      "name": "Route to Specialized Agents",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.1,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "options": {
+          "temperature": 0.2,
+          "maxTokensToSample": 4000
+        }
+      },
+      "id": "8",
+      "name": "Claude Notion Specialist",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [1400, 200],
+      "credentials": {
+        "anthropicApi": {
+          "id": "1",
+          "name": "Anthropic Claude API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.agentTask.taskDescription }}",
+        "hasOutputParser": false,
+        "agent": "toolsAgent",
+        "options": {
+          "systemMessage": "You are the Notion Agent - specialized in idea processing and database operations.\n\n# TASK EXECUTION\nExecute the specific task assigned by the Intelligent Director. Use shared context to inform your decisions.\n\n# SHARED CONTEXT AWARENESS\nYou have access to:\n- Previous agent executions and results\n- Current workflow phase and iteration\n- Director's reasoning for assigning this task\n- System execution history\n\n# MULTI-IDEA PARSING METHODOLOGY\n## Detection Rules:\n1. **Single vs Multiple Ideas**: Analyze if a post contains one idea or multiple distinct ideas\n2. **Paragraph Separation**: Each new paragraph often indicates a new idea\n3. **Empty Block Delimiter**: Extra empty blocks designate new ideas\n4. **Link + Description Grouping**: Text directly above a link describes that link (group together)\n5. **Topic Shift Detection**: Identify when paragraphs shift to completely different topics\n\n## Categorization Rules:\n- **Project Table**: Actionable ideas, implementation plans, technical projects\n- **Journal Table**: Personal thoughts, reflections, observations, experiences\n- **General Table**: Quick notes, references, miscellaneous content\n\n## Status Processing Workflow:\n1. **Not Started** → Retrieve and analyze for processing\n2. **In Progress** → Currently being processed (set when starting work)\n3. **Done** → Fully processed and categorized (skip these)\n\n# CORE CAPABILITIES\n- Status-based processing (Not Started → Done)\n- Multi-idea detection and parsing per methodology above\n- Project/Journal/General categorization based on content analysis\n- Database updates and project creation\n- Idea lifecycle management\n\n# INTELLIGENT TASK ADAPTATION\nAdapt your processing based on:\n- Specific task parameters from Director\n- Shared context from previous agents\n- Current system state and history\n- Priority and complexity indicators\n\n# MCP TOOLS USAGE\n- get_ideas: Retrieve ideas with status='Not Started' and daysBack=1 for today's unprocessed ideas\n- get_idea_by_id: Deep analysis of specific ideas for multi-idea parsing\n- search_ideas: Find related content and patterns\n- update_idea: Status updates (Not Started → In Progress → Done) and categorization\n\n# OUTPUT REQUIREMENTS\n- Execute the assigned task thoroughly using multi-idea parsing methodology\n- Update status: In Progress when starting, Done when complete\n- Provide structured results for shared context\n- Include recommendations for next steps\n- Report if all recent ideas are fully processed\n\n**Focus on executing the Director's specific task while leveraging shared context and multi-idea parsing methodology for optimal results.**",
+          "maxIterations": 15
+        }
+      },
+      "id": "9",
+      "name": "Notion Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get all ideas from Notion database with filtering options. Use status='Not Started' to find unprocessed ideas. Use daysBack=7 to get ideas from this week only.",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas?limit={limit}&filter={filter}&status={status}&daysBack={daysBack}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "limit",
+              "description": "Number of ideas to retrieve (default: 50)"
+            },
+            {
+              "name": "filter",
+              "description": "Optional text search filter"
+            },
+            {
+              "name": "status",
+              "description": "Status filter: 'Not Started', 'In Progress', 'Done'"
+            },
+            {
+              "name": "daysBack",
+              "description": "Filter recent ideas (7 = this week, 1 = today)"
+            }
+          ]
+        }
+      },
+      "id": "10",
+      "name": "Notion Get Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1420, 120]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get specific idea by ID for detailed analysis",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "idea_id",
+              "description": "The ID of the specific idea to retrieve"
+            }
+          ]
+        }
+      },
+      "id": "10a",
+      "name": "Notion Get Idea By ID",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1420, 200]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search ideas by content or title",
+        "method": "POST",
+        "url": "http://host.docker.internal:3001/api/ideas/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"{query}\",\n  \"limit\": {limit}\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "query",
+              "description": "Search query to find matching ideas"
+            },
+            {
+              "name": "limit",
+              "description": "Number of results (default: 20)"
+            }
+          ]
+        }
+      },
+      "id": "10b",
+      "name": "Notion Search Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1420, 280]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Update idea status, content, tags - core processing function",
+        "method": "PUT",
+        "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"{status}\",\n  \"content\": \"{content}\",\n  \"tags\": {tags}\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "idea_id",
+              "description": "ID of idea to update"
+            },
+            {
+              "name": "status",
+              "description": "New status: 'Not Started', 'In Progress', 'Done'"
+            },
+            {
+              "name": "content",
+              "description": "Updated content (optional)"
+            },
+            {
+              "name": "tags",
+              "description": "JSON array of tags (optional)"
+            }
+          ]
+        }
+      },
+      "id": "10c",
+      "name": "Notion Update Idea",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1420, 360]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "options": {
+          "temperature": 0.4,
+          "maxTokensToSample": 3000
+        }
+      },
+      "id": "11",
+      "name": "Claude Planner Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [1400, 500],
+      "credentials": {
+        "anthropicApi": {
+          "id": "1",
+          "name": "Anthropic Claude API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.agentTask.taskDescription }}",
+        "hasOutputParser": false,
+        "agent": "toolsAgent",
+        "options": {
+          "systemMessage": "You are the Planner Agent - specialized in strategic planning and task decomposition.\n\n# TASK EXECUTION\nExecute the specific planning task assigned by the Intelligent Director using shared context.\n\n# SHARED CONTEXT INTEGRATION\nLeverage shared workflow context:\n- Previous agent results and decisions\n- Current system state and phase\n- Director's strategic reasoning\n- Execution history and patterns\n\n# STRATEGIC PLANNING CAPABILITIES\n- Task decomposition and breakdown\n- Execution strategy development\n- Resource and timeline planning\n- Risk assessment and mitigation\n- Implementation roadmaps\n\n# INTELLIGENT PLANNING\n- Use shared context to inform planning decisions\n- Consider previous agent outputs and recommendations\n- Plan for integration with other agent workflows\n- Optimize for system-wide efficiency and goals\n\n# AVAILABLE MCP TOOLS\n- get_ideas: Understand current project landscape\n- search_ideas: Find related projects and patterns for informed planning\n\n# OUTPUT REQUIREMENTS\n- Strategic plan based on assigned task\n- Structured recommendations for implementation\n- Integration considerations for other agents\n- Next steps and follow-up actions\n\n**Create intelligent, context-aware strategic plans that integrate seamlessly with the multi-agent system.**",
+          "maxIterations": 12
+        }
+      },
+      "id": "12",
+      "name": "Planner Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [1320, 600]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get ideas for strategic planning analysis. Use to understand current project landscape and plan future work.",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas?limit={limit}&status={status}&daysBack={daysBack}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "limit",
+              "description": "Number of ideas for planning analysis"
+            },
+            {
+              "name": "status",
+              "description": "Status filter for planning focus"
+            },
+            {
+              "name": "daysBack",
+              "description": "Recent ideas for planning (7 = this week)"
+            }
+          ]
+        }
+      },
+      "id": "13",
+      "name": "Planner Get Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1420, 500]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search ideas for planning patterns and related projects",
+        "method": "POST",
+        "url": "http://host.docker.internal:3001/api/ideas/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"{query}\",\n  \"limit\": {limit}\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "query",
+              "description": "Search query for planning analysis"
+            },
+            {
+              "name": "limit",
+              "description": "Number of results for analysis"
+            }
+          ]
+        }
+      },
+      "id": "13a",
+      "name": "Planner Search Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1420, 580]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "options": {
+          "temperature": 0.1,
+          "maxTokensToSample": 2500
+        }
+      },
+      "id": "14",
+      "name": "Claude Validation Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [1400, 800],
+      "credentials": {
+        "anthropicApi": {
+          "id": "1",
+          "name": "Anthropic Claude API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.agentTask.taskDescription }}",
+        "hasOutputParser": false,
+        "agent": "toolsAgent",
+        "options": {
+          "systemMessage": "You are the Validation Agent - specialized in quality assurance and system validation.\n\n# TASK EXECUTION\nExecute the specific validation task assigned by the Intelligent Director using comprehensive shared context.\n\n# SHARED CONTEXT VALIDATION\nLeverage shared workflow context to:\n- Review and validate previous agent outputs\n- Check consistency across all agent results\n- Verify adherence to system standards and rules\n- Identify quality issues or inconsistencies\n\n# VALIDATION CAPABILITIES\n- Quality assessment of agent outputs\n- Consistency checking across agents\n- Error detection and reporting\n- Compliance verification\n- System health monitoring\n\n# INTELLIGENT QUALITY CONTROL\n- Context-aware validation based on shared data\n- Cross-reference agent outputs for consistency\n- Identify patterns and quality trends\n- Provide actionable feedback and recommendations\n\n# AVAILABLE MCP TOOLS\n- get_ideas: Review processed items and validate changes\n- search_ideas: Validate categorizations and check consistency\n\n# OUTPUT REQUIREMENTS\n- Validation results for assigned task\n- Quality assessment scores and metrics\n- Issue identification and specific recommendations\n- Consistency verification across system\n- Items flagged for human review if needed\n\n**Provide intelligent quality assurance using shared context to ensure system-wide consistency and excellence.**",
+          "maxIterations": 10
+        }
+      },
+      "id": "15",
+      "name": "Validation Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [1320, 900]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get ideas for validation and quality checks. Use to verify processing results and ensure consistency.",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas?limit={limit}&status={status}&daysBack={daysBack}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "limit",
+              "description": "Number of ideas to validate"
+            },
+            {
+              "name": "status", 
+              "description": "Status filter for validation focus"
+            },
+            {
+              "name": "daysBack",
+              "description": "Recent ideas for validation (7 = this week)"
+            }
+          ]
+        }
+      },
+      "id": "16",
+      "name": "Validation Get Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1420, 800]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search ideas for validation patterns and consistency checks",
+        "method": "POST",
+        "url": "http://host.docker.internal:3001/api/ideas/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"{query}\",\n  \"limit\": {limit}\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "query",
+              "description": "Search query for validation checks"
+            },
+            {
+              "name": "limit",
+              "description": "Number of results to validate"
+            }
+          ]
+        }
+      },
+      "id": "16a",
+      "name": "Validation Search Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1420, 880]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Update Shared Context with Agent Results\nconst agentResult = $json;\nconst routingData = $('Parse Routing Decision').first().json;\nconst systemContext = routingData.systemContext;\n\n// Extract agent information and results\nconst agentType = routingData.agentTask.agentType;\nconst agentOutput = agentResult.output || agentResult.text || 'No output available';\nconst taskDescription = routingData.agentTask.taskDescription;\n\n// Update shared context with agent results\nsystemContext.sharedData[agentType] = {\n  output: agentOutput,\n  taskDescription: taskDescription,\n  timestamp: new Date().toISOString(),\n  status: 'completed',\n  priority: routingData.agentTask.priority,\n  complexity: routingData.agentTask.complexity\n};\n\n// Update execution history\nconst currentExecution = systemContext.executionHistory[systemContext.executionHistory.length - 1];\nif (currentExecution) {\n  currentExecution.agentResults = currentExecution.agentResults || {};\n  currentExecution.agentResults[agentType] = {\n    output: agentOutput,\n    completedAt: new Date().toISOString(),\n    status: 'completed'\n  };\n}\n\n// Check if there's a follow-up agent needed\nconst followUpAgent = routingData.routingDecision.followUpAgent;\nconst shouldContinue = followUpAgent && followUpAgent !== 'none';\n\n// Prepare continuation data\nconst continuationData = {\n  systemContext,\n  lastAgentResult: {\n    agent: agentType,\n    output: agentOutput,\n    timestamp: new Date().toISOString()\n  },\n  shouldContinue,\n  followUpAgent,\n  followUpTask: routingData.routingDecision.followUpTask,\n  workflowPhase: shouldContinue ? 'continuation' : 'completion',\n  directorAnalysis: routingData.directorAnalysis\n};\n\n// Increment iteration if continuing\nif (shouldContinue) {\n  systemContext.iteration = (systemContext.iteration || 1) + 1;\n  systemContext.currentPhase = 'follow_up_routing';\n}\n\nreturn [continuationData];"
+      },
+      "id": "17",
+      "name": "Update Shared Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "leftValue": "={{ $json.shouldContinue }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "18",
+      "name": "Continue Workflow?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1760, 600]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "follow-up-context",
+              "name": "systemContext",
+              "value": "={{ $json.systemContext }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "19",
+      "name": "Prepare Follow-up Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1760, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final Results Consolidation\nconst workflowData = $json;\nconst systemContext = workflowData.systemContext;\n\n// Gather all agent results from shared context\nconst agentResults = systemContext.sharedData || {};\nconst executionHistory = systemContext.executionHistory || [];\n\n// Calculate workflow metrics\nconst totalExecutionTime = new Date().getTime() - new Date(systemContext.startTime).getTime();\nconst agentsUsed = Object.keys(agentResults);\nconst totalIterations = systemContext.iteration || 1;\n\n// Create comprehensive final report\nconst finalReport = {\n  metadata: {\n    sessionId: systemContext.sessionId,\n    workflowType: systemContext.workflowType,\n    startTime: systemContext.startTime,\n    endTime: new Date().toISOString(),\n    totalExecutionTime: Math.round(totalExecutionTime / 1000),\n    totalIterations\n  },\n  \n  intelligentRouting: {\n    totalAgentInvocations: executionHistory.length,\n    agentsUsed: agentsUsed,\n    routingDecisions: executionHistory.map(entry => ({\n      iteration: entry.iteration,\n      timestamp: entry.timestamp,\n      directorDecision: entry.directorDecision,\n      phase: entry.phase,\n      agentResults: entry.agentResults || {}\n    })),\n    adaptiveWorkflow: totalIterations > 1 ? 'Multi-iteration coordination' : 'Single-pass execution'\n  },\n  \n  agentResults: agentsUsed.map(agentType => ({\n    agent: agentType,\n    taskDescription: agentResults[agentType].taskDescription,\n    output: agentResults[agentType].output,\n    timestamp: agentResults[agentType].timestamp,\n    priority: agentResults[agentType].priority,\n    complexity: agentResults[agentType].complexity,\n    status: agentResults[agentType].status\n  })),\n  \n  sharedDataUtilization: {\n    contextMaintained: true,\n    crossAgentDataSharing: agentsUsed.length > 1,\n    workflowContinuity: 'Successfully maintained throughout execution',\n    iterativeProcessing: totalIterations > 1\n  },\n  \n  executiveSummary: `🎯 Simplified Intelligent Director System Report\n📅 ${new Date(systemContext.startTime).toDateString()}\n\n## 🧠 INTELLIGENT ROUTING SUMMARY:\n**Agents Coordinated**: ${agentsUsed.join(', ')}\n**Total Iterations**: ${totalIterations}\n**Routing Strategy**: Dynamic, context-aware agent selection\n**Workflow Type**: ${totalIterations > 1 ? 'Multi-step coordination' : 'Direct execution'}\n\n## 🔄 AGENT EXECUTION RESULTS:\n${agentsUsed.map(agent => \n  `**${agent.charAt(0).toUpperCase() + agent.slice(1)} Agent**:\\n${agentResults[agent].output.substring(0, 300)}...`\n).join('\\n\\n')}\n\n## 📊 SYSTEM PERFORMANCE:\n- **Total Execution Time**: ${Math.round(totalExecutionTime / 1000)} seconds\n- **Shared Context**: Successfully maintained across ${agentsUsed.length} agents\n- **Intelligent Decisions**: ${executionHistory.length} routing decisions made\n- **System Efficiency**: ${totalIterations > 1 ? 'Multi-step optimization' : 'Single-pass efficiency'}\n\n---\n⚡ Generated by Simplified Intelligent Director System\n🔧 Features: Dynamic routing, shared context, adaptive workflows\n📈 Strategy: Context-aware coordination with intelligent decision making`,\n  \n  systemCapabilities: {\n    intelligentRouting: true,\n    sharedContextManagement: true,\n    adaptiveWorkflows: true,\n    qualityAssurance: agentResults.validation ? true : false,\n    iterativeProcessing: totalIterations > 1,\n    crossAgentCommunication: true\n  }\n};\n\n// Log successful completion\nconsole.log('🎯 Simplified Intelligent Director System Completed:', {\n  sessionId: finalReport.metadata.sessionId,\n  agentsUsed: finalReport.intelligentRouting.agentsUsed,\n  executionTime: finalReport.metadata.totalExecutionTime,\n  iterations: totalIterations\n});\n\nreturn [finalReport];"
+      },
+      "id": "20",
+      "name": "Consolidate Final Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 700]
+    },
+    {
+      "parameters": {
+        "content": "# Simplified Intelligent Director System\n\n## 🎯 Core Features\n- **Intelligent Routing**: Director analyzes and routes to optimal agents\n- **Structured Output**: JSON-based routing decisions for reliability\n- **Shared Context**: Persistent state across all agent interactions\n- **Adaptive Workflows**: Can continue with follow-up agents\n- **Visual Integration**: All agents in single workflow\n\n## 🔄 System Flow\n1. **Initialize Context**: Set up shared workflow state\n2. **Director Analysis**: AI-driven routing decisions with structured output\n3. **Parse & Route**: Extract routing decision and route to appropriate agent\n4. **Agent Execution**: Specialized processing with shared context awareness\n5. **Context Update**: Maintain state and check for follow-up needs\n6. **Continue/Complete**: Adaptive workflow continuation or final consolidation\n\n## ✅ Technical Benefits\n- **Reliable Routing**: Structured JSON output prevents parsing errors\n- **Flexible Coordination**: Support for multi-step agent workflows\n- **Context Preservation**: Shared data maintained throughout execution\n- **Error Recovery**: Fallback routing for robust operation",
+        "height": 450,
+        "width": 500,
+        "color": 3
+      },
+      "id": "21",
+      "name": "System Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, 800]
+    }
+  ],
+  "connections": {
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "Initialize Shared Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Shared Context": {
+      "main": [
+        [
+          {
+            "node": "Intelligent Director Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+
+    "Claude Director Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Intelligent Director Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intelligent Director Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Routing Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Routing Decision": {
+      "main": [
+        [
+          {
+            "node": "Route to Specialized Agents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route to Specialized Agents": {
+      "main": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Planner Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validation Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Notion Specialist": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Agent": {
+      "main": [
+        [
+          {
+            "node": "Update Shared Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Get Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Get Idea By ID": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Search Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Update Idea": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Planner Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Planner Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner Agent": {
+      "main": [
+        [
+          {
+            "node": "Update Shared Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner Get Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Planner Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner Search Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Planner Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Validation Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Validation Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Agent": {
+      "main": [
+        [
+          {
+            "node": "Update Shared Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Get Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Validation Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Search Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Validation Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Shared Context": {
+      "main": [
+        [
+          {
+            "node": "Continue Workflow?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue Workflow?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Follow-up Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consolidate Final Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Follow-up Context": {
+      "main": [
+        [
+          {
+            "node": "Intelligent Director Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["intelligent-routing", "simplified", "shared-context", "multi-agent"],
+  "triggerCount": 1,
+  "updatedAt": "2025-08-12T06:00:00.000Z",
+  "versionId": "1"
+} 

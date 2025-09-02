@@ -1,0 +1,79 @@
+services:
+  notion-idea-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: notion-idea-mcp-server
+    restart: unless-stopped
+    
+    # Environment variables
+    environment:
+      - NODE_ENV=production
+      - SERVER_NAME=notion-idea-server
+      - SERVER_VERSION=1.0.0
+    
+    # Load environment variables from .env file
+    env_file:
+      - .env
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    
+    # Health check disabled for MCP servers (they communicate via stdio)
+    # healthcheck:
+    #   test: ["CMD", "node", "-e", "console.log('Health check passed')"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 10s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # For MCP servers, we typically don't expose ports since they use stdio
+    # But we can add stdin/stdout handling if needed for debugging
+    stdin_open: true
+    tty: true
+
+  # Development service with hot reload
+  notion-idea-server-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: notion-idea-mcp-server-dev
+    restart: unless-stopped
+    
+    environment:
+      - NODE_ENV=development
+      - SERVER_NAME=notion-idea-server-dev
+    
+    env_file:
+      - .env
+    
+    # Mount source code for development
+    volumes:
+      - ./src:/app/src:ro
+      - ./package.json:/app/package.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+    
+    # Override command for development
+    command: ["npm", "run", "dev"]
+    
+    stdin_open: true
+    tty: true
+    
+    profiles:
+      - dev 

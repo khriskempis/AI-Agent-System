@@ -1,0 +1,300 @@
+{
+  "name": "Planner Agent - Standalone Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "test-context",
+              "name": "testContext",
+              "value": {
+                "sessionId": "={{ $now.toISOString() }}",
+                "workflowType": "planner_agent_test",
+                "startTime": "={{ new Date().toISOString() }}",
+                "agentType": "planner",
+                "taskDescription": "Analyze provided data and create strategic plan for project execution and task decomposition",
+                "testData": "Sample project: Build a personal productivity dashboard with ideas from Notion, task tracking, and progress visualization."
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "setup-context",
+      "name": "Setup Test Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get ideas from Notion database for planning analysis - returns ideas with status, content, tags for strategic planning",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas?limit={limit}&filter={filter}&status={status}&daysBack={daysBack}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "limit",
+              "description": "Number of ideas to retrieve for planning analysis"
+            },
+            {
+              "name": "filter",
+              "description": "Optional text search filter for planning-related content"
+            },
+            {
+              "name": "status",
+              "description": "Status filter for planning: 'Not Started', 'In Progress', 'Done'"
+            },
+            {
+              "name": "daysBack",
+              "description": "Time range for planning analysis (days)"
+            }
+          ]
+        }
+      },
+      "id": "planner-get-ideas",
+      "name": "Planner Get Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [700, 200]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search ideas for planning patterns - finds related content for strategic analysis and planning",
+        "method": "POST",
+        "url": "http://host.docker.internal:3001/api/ideas/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"{query}\",\n  \"limit\": {limit}\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "query",
+              "description": "Search query for planning-related ideas and patterns"
+            },
+            {
+              "name": "limit",
+              "description": "Number of planning-related results to return"
+            }
+          ]
+        }
+      },
+      "id": "planner-search-ideas",
+      "name": "Planner Search Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "options": {
+          "temperature": 0.4,
+          "maxTokensToSample": 4000
+        }
+      },
+      "id": "claude-model",
+      "name": "Claude Planner Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [680, 500],
+      "credentials": {
+        "anthropicApi": {
+          "id": "1",
+          "name": "Anthropic Claude API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Task: {{ $json.testContext.taskDescription }}\n\nData to analyze: {{ $json.testContext.testData }}\n\nUse your analytical tools to create a strategic plan and task decomposition.",
+        "hasOutputParser": false,
+        "agent": "toolsAgent",
+        "options": {
+          "systemMessage": "You are the Planner Agent - the specialist for strategic planning, task decomposition, and execution strategies.\n\n# PLANNER AGENT SPECIALIZATION\n\n## Core Mission\nProvide strategic planning expertise, break down complex projects into manageable tasks, and create execution roadmaps.\n\n## Your Analytical Tools:\n1. **get_ideas**: Retrieve ideas for planning analysis and pattern recognition\n2. **search_ideas**: Find related content and identify planning opportunities\n\n## Planning Methodologies:\n\n### Strategic Analysis:\n1. **Goal Identification**: Define clear, measurable objectives\n2. **Resource Assessment**: Evaluate available resources and constraints\n3. **Risk Analysis**: Identify potential obstacles and mitigation strategies\n4. **Timeline Planning**: Create realistic schedules and milestones\n\n### Task Decomposition:\n1. **Break Down Complex Goals**: Split large projects into smaller, actionable tasks\n2. **Dependency Mapping**: Identify task relationships and prerequisites\n3. **Priority Matrix**: Rank tasks by importance and urgency\n4. **Resource Allocation**: Assign resources and responsibilities\n\n### Execution Strategies:\n1. **Milestone Planning**: Define key checkpoints and deliverables\n2. **Iteration Cycles**: Plan for iterative development and feedback\n3. **Quality Gates**: Establish criteria for task completion\n4. **Contingency Planning**: Prepare alternative approaches\n\n## Planning Output Format:\nProvide structured plans with:\n- **Executive Summary**: High-level overview and objectives\n- **Task Breakdown**: Detailed task list with priorities\n- **Timeline**: Milestones and deadlines\n- **Resources**: Required tools, skills, and dependencies\n- **Risk Assessment**: Potential challenges and solutions\n- **Success Metrics**: How to measure progress and completion\n\n## Analysis Instructions:\n1. **Gather Context**: Use tools to understand current state and available ideas\n2. **Identify Patterns**: Look for themes, opportunities, and gaps\n3. **Create Structure**: Organize information into actionable plans\n4. **Define Phases**: Break work into logical stages\n5. **Provide Recommendations**: Suggest optimal approaches and next steps\n\n**Focus on creating practical, actionable plans that can be executed by other agents or team members.**",
+          "maxIterations": 10
+        }
+      },
+      "id": "planner-agent",
+      "name": "Planner Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze Planner Agent Test Results\nconst plannerOutput = $json;\nconst testContext = $('Setup Test Context').first().json.testContext;\n\n// Extract output text\nconst outputText = plannerOutput.output || plannerOutput.text || JSON.stringify(plannerOutput) || '';\n\n// Analyze planning capabilities\nconst planningAnalysis = {\n  hasExecutiveSummary: outputText.toLowerCase().includes('summary') || outputText.toLowerCase().includes('overview'),\n  hasTaskBreakdown: outputText.toLowerCase().includes('task') || outputText.toLowerCase().includes('step'),\n  hasTimeline: outputText.toLowerCase().includes('timeline') || outputText.toLowerCase().includes('milestone'),\n  hasResourceAnalysis: outputText.toLowerCase().includes('resource') || outputText.toLowerCase().includes('requirement'),\n  hasRiskAssessment: outputText.toLowerCase().includes('risk') || outputText.toLowerCase().includes('challenge'),\n  hasSuccessMetrics: outputText.toLowerCase().includes('metric') || outputText.toLowerCase().includes('measure'),\n  usedAnalyticalTools: outputText.includes('get_ideas') || outputText.includes('search_ideas'),\n  hasStructuredFormat: outputText.includes('##') || outputText.includes('1.') || outputText.includes('-'),\n  demonstratesPlanning: outputText.toLowerCase().includes('plan') || outputText.toLowerCase().includes('strategy')\n};\n\n// Calculate planning score\nconst planningElements = Object.values(planningAnalysis).filter(Boolean).length;\nconst maxElements = Object.keys(planningAnalysis).length;\nconst planningScore = (planningElements / maxElements) * 100;\n\n// Assess output quality\nconst qualityMetrics = {\n  outputLength: outputText.length,\n  hasDetailedContent: outputText.length > 500,\n  hasActionableItems: outputText.toLowerCase().includes('action') || outputText.toLowerCase().includes('next'),\n  showsStrategicThinking: outputText.toLowerCase().includes('approach') || outputText.toLowerCase().includes('strategy')\n};\n\nconst testResults = {\n  timestamp: new Date().toISOString(),\n  testType: 'Planner Agent Standalone',\n  testContext,\n  planningAnalysis,\n  qualityMetrics,\n  outputText,\n  summary: {\n    status: planningScore >= 60 && qualityMetrics.hasDetailedContent ? 'PASSED' : 'FAILED',\n    planningScore: Math.round(planningScore),\n    elementsPresent: planningElements + '/' + maxElements,\n    hasStrategicCapability: planningAnalysis.demonstratesPlanning && qualityMetrics.showsStrategicThinking\n  }\n};\n\nreturn [testResults];"
+      },
+      "id": "analyze-results",
+      "name": "Analyze Planning Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.summary.status }}",
+              "rightValue": "PASSED"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "test-result-switch",
+      "name": "Test Result Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// SUCCESS: Planner Agent Test Passed\nconst results = $json;\n\nreturn [{\n  status: 'SUCCESS',\n  message: '✅ Planner Agent Test PASSED',\n  details: {\n    planningScore: results.summary.planningScore + '%',\n    elementsPresent: results.summary.elementsPresent,\n    hasStrategicCapability: results.summary.hasStrategicCapability,\n    outputLength: results.qualityMetrics.outputLength + ' characters'\n  },\n  strengths: [\n    results.planningAnalysis.hasTaskBreakdown ? 'Excellent task breakdown capability' : null,\n    results.planningAnalysis.hasTimeline ? 'Good timeline planning' : null,\n    results.planningAnalysis.hasRiskAssessment ? 'Risk assessment included' : null,\n    results.planningAnalysis.usedAnalyticalTools ? 'Used analytical tools effectively' : null,\n    results.qualityMetrics.hasActionableItems ? 'Provided actionable recommendations' : null\n  ].filter(Boolean),\n  planningCapabilities: {\n    strategicThinking: results.qualityMetrics.showsStrategicThinking,\n    structuredOutput: results.planningAnalysis.hasStructuredFormat,\n    toolUsage: results.planningAnalysis.usedAnalyticalTools,\n    comprehensiveAnalysis: results.summary.planningScore >= 80\n  },\n  nextSteps: [\n    'Planner Agent demonstrates strategic capabilities',\n    'Ready to receive tasks from Director routing',\n    'Can provide planning support to other agents'\n  ],\n  timestamp: results.timestamp\n}];"
+      },
+      "id": "success-output",
+      "name": "✅ Test Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// FAILURE: Planner Agent Test Failed\nconst results = $json;\n\nreturn [{\n  status: 'FAILURE',\n  message: '❌ Planner Agent Test FAILED',\n  details: {\n    planningScore: results.summary.planningScore + '%',\n    elementsPresent: results.summary.elementsPresent,\n    hasStrategicCapability: results.summary.hasStrategicCapability,\n    outputLength: results.qualityMetrics.outputLength + ' characters'\n  },\n  issues: [\n    results.summary.planningScore < 30 ? 'Very low planning capability score' : null,\n    !results.qualityMetrics.hasDetailedContent ? 'Output too brief for planning analysis' : null,\n    !results.planningAnalysis.demonstratesPlanning ? 'Lacks strategic planning focus' : null,\n    !results.planningAnalysis.hasTaskBreakdown ? 'Missing task decomposition' : null,\n    !results.qualityMetrics.showsStrategicThinking ? 'Lacks strategic thinking patterns' : null\n  ].filter(Boolean),\n  missingElements: [\n    !results.planningAnalysis.hasExecutiveSummary ? 'Executive Summary' : null,\n    !results.planningAnalysis.hasTimeline ? 'Timeline/Milestones' : null,\n    !results.planningAnalysis.hasResourceAnalysis ? 'Resource Analysis' : null,\n    !results.planningAnalysis.hasRiskAssessment ? 'Risk Assessment' : null,\n    !results.planningAnalysis.hasSuccessMetrics ? 'Success Metrics' : null\n  ].filter(Boolean),\n  troubleshooting: [\n    'Review Planner Agent system message for strategic planning focus',\n    'Check if agent understands planning methodology',\n    'Verify analytical tools are accessible',\n    'Test with more specific planning tasks',\n    'Consider adjusting temperature for more structured output'\n  ],\n  timestamp: results.timestamp\n}];"
+      },
+      "id": "failure-output",
+      "name": "❌ Test Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 400]
+    }
+  ],
+  "connections": {
+    "Manual Test Trigger": {
+      "main": [
+        [
+          {
+            "node": "Setup Test Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup Test Context": {
+      "main": [
+        [
+          {
+            "node": "Planner Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner Get Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Planner Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner Search Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Planner Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Planner Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Planner Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner Agent": {
+      "main": [
+        [
+          {
+            "node": "Analyze Planning Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Planning Results": {
+      "main": [
+        [
+          {
+            "node": "Test Result Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Result Switch": {
+      "main": [
+        [
+          {
+            "node": "✅ Test Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "❌ Test Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-15T09:00:00.000Z",
+  "versionId": "test-planner-v1"
+} 
