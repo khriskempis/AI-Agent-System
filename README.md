@@ -19,10 +19,38 @@ MCP Server/
 ├── n8n/workflows/              # 🤖 AI agent workflows
 │   ├── simplified-intelligent-director.json  # Main workflow
 │   └── examples/               # Working examples and patterns
-└── scripts/                    # 🔧 Management scripts
+└── scripts/                    # 🔧 Docker startup scripts
 ```
 
 ## 🚀 Quick Start
+
+### **🐳 One-Command Docker Setup (Recommended)**
+
+```bash
+# Start complete MCP Server + AI Agents ecosystem
+./scripts/start-full-project.sh
+
+# Or quick silent startup
+./scripts/quick-start.sh
+```
+
+**✅ This starts:**
+- **Main MCP Server** (stdio mode for direct MCP clients)
+- **HTTP API Server** (port 3001 for n8n agents) 
+- **n8n AI Platform** (port 5678 for workflows)
+
+**🌐 Access URLs:**
+- n8n Platform: http://localhost:5678
+- MCP HTTP API: http://localhost:3001
+
+### **🔧 Development Setup**
+
+```bash
+# Start with hot reload for coding
+./scripts/start-development.sh
+```
+
+### **📚 Manual Setup**
 
 1. **📖 Read the docs**: Start with [docs/README.md](./docs/README.md)
 2. **⚙️ Setup MCP Server**: Follow [notion-idea-server/README.md](./notion-idea-server/README.md)
@@ -56,6 +84,50 @@ MCP Server/
 - **Daily Mode**: Process only today's unprocessed ideas (default)
 - **Weekly Mode**: Process ideas from the past week
 - **Manual Mode**: Flexible testing with custom date ranges
+
+## 🐳 Docker Management Scripts
+
+### **Available Scripts**
+
+| **Script** | **Purpose** | **Use Case** |
+|------------|-------------|--------------|
+| `./scripts/start-full-project.sh` | **Complete Setup** | AI agents & workflows |
+| `./scripts/start-development.sh` | **Development Mode** | Hot reload coding |
+| `./scripts/quick-start.sh` | **Silent Startup** | Fast testing |
+| `./scripts/stop-all.sh` | **Clean Shutdown** | Stop everything |
+
+### **Docker Desktop Integration**
+
+All containers are clearly visible in Docker Desktop:
+- `mcp-notion-idea-server` - Main MCP server (stdio)
+- `mcp-notion-idea-server-http` - HTTP API server
+- `n8n-server` - AI workflow platform
+
+### **Usage Examples**
+
+```bash
+# 🚀 Start everything for AI agents
+./scripts/start-full-project.sh
+
+# 🔧 Start development environment with hot reload  
+./scripts/start-development.sh
+
+# ⚡ Quick silent startup (no prompts)
+./scripts/quick-start.sh
+
+# 🛑 Stop all containers
+./scripts/stop-all.sh
+```
+
+### **Configuration Requirements**
+
+Before running scripts, ensure:
+1. **Docker Desktop** is running
+2. **Environment file** exists: `./notion-idea-server/.env`
+   ```bash
+   cp ./notion-idea-server/env.template ./notion-idea-server/.env
+   # Edit with your Notion credentials
+   ```
 
 ## 🐛 Common Issues & Quick Fixes
 
