@@ -166,16 +166,11 @@ export class NotionService {
       }
 
       // Add date filter if daysBack is provided
+      // NOTE: Temporarily disabled due to missing "Last edited time" property in database
+      // TODO: Add "Last edited time" property to Notion database or use alternative filtering
       if (daysBack && daysBack > 0) {
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - daysBack);
-        
-        filters.push({
-          property: 'Last edited time',
-          last_edited_time: {
-            on_or_after: cutoffDate.toISOString(),
-          },
-        });
+        console.warn(`Date filtering (daysBack=${daysBack}) requested but "Last edited time" property not available in database. Skipping date filter.`);
+        // Skip date filtering to avoid errors - will return all results matching other filters
       }
 
       // Apply filters if any exist
