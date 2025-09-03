@@ -21,7 +21,7 @@
                 "workflowType": "notion_agent_test",
                 "startTime": "={{ new Date().toISOString() }}",
                 "agentType": "notion",
-                "taskDescription": "Check for Not Started ideas from today (daysBack=1), process and categorize them using multi-idea parsing methodology",
+                "taskDescription": "Get exactly 1 Not Started idea (limit=1) for testing. Process and demonstrate multi-idea parsing methodology on this single idea only.",
                 "testMode": true
               },
               "type": "object"
@@ -38,18 +38,18 @@
     },
     {
       "parameters": {
-        "toolDescription": "Get ideas from Notion database - returns all ideas with status, content, tags. Use status='Not Started' to find unprocessed ideas. Use daysBack=1 for today's ideas.",
+        "toolDescription": "TESTING: Get exactly 1 idea only. ALWAYS use limit=1 and status='Not Started'. Do not exceed 1 idea to control token usage.",
         "method": "GET",
         "url": "http://host.docker.internal:3001/api/ideas?limit={limit}&filter={filter}&status={status}&daysBack={daysBack}",
         "placeholderDefinitions": {
           "values": [
             {
               "name": "limit",
-              "description": "Number of ideas to retrieve (default: 50, max: 100)"
+              "description": "TESTING: Always use 1 to get exactly one idea"
             },
             {
               "name": "filter",
-              "description": "Optional text search filter for title/content"
+              "description": "Optional text search filter"
             },
             {
               "name": "status",
@@ -57,7 +57,7 @@
             },
             {
               "name": "daysBack",
-              "description": "Filter ideas modified in last N days (1 for today)"
+              "description": "Filter recent ideas (7 = this week, 1 = today)"
             }
           ]
         }
@@ -70,14 +70,14 @@
     },
     {
       "parameters": {
-        "toolDescription": "Get specific idea by ID for detailed analysis - returns full idea content including rich page blocks",
+        "toolDescription": "Get specific idea by ID for detailed analysis",
         "method": "GET",
         "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
         "placeholderDefinitions": {
           "values": [
             {
               "name": "idea_id",
-              "description": "ID of the specific idea to retrieve"
+              "description": "The ID of the specific idea to retrieve"
             }
           ]
         }
@@ -90,7 +90,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Search ideas by query string - finds ideas matching text content in title, description, or content fields",
+        "toolDescription": "Search ideas by content or title",
         "method": "POST",
         "url": "http://host.docker.internal:3001/api/ideas/search",
         "sendBody": true,
@@ -100,11 +100,11 @@
           "values": [
             {
               "name": "query",
-              "description": "Search query to find relevant ideas"
+              "description": "Search query to find matching ideas"
             },
             {
               "name": "limit",
-              "description": "Number of results to return (default: 20)"
+              "description": "Number of results (default: 20)"
             }
           ]
         }
@@ -117,29 +117,21 @@
     },
     {
       "parameters": {
-        "toolDescription": "Update idea status, content, or tags - use for processing workflow management. Set status to 'In Progress' when starting work, 'Done' when completed.",
+        "toolDescription": "Update idea status - simplified for testing. REQUIRED: Always provide status parameter. Use 'In Progress' or 'Done'.",
         "method": "PUT",
         "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n  \"status\": \"{status}\",\n  \"content\": \"{content}\",\n  \"tags\": {tags}\n}",
+        "jsonBody": "{\"status\": \"{status}\"}",
         "placeholderDefinitions": {
           "values": [
             {
               "name": "idea_id",
-              "description": "ID of the idea to update"
+              "description": "ID of idea to update"
             },
             {
               "name": "status",
-              "description": "New status: 'Not Started', 'In Progress', 'Done'"
-            },
-            {
-              "name": "content",
-              "description": "Updated content for the idea (optional)"
-            },
-            {
-              "name": "tags",
-              "description": "Array of tags as JSON (optional)"
+              "description": "REQUIRED: Use 'Not Started', 'In Progress', or 'Done'"
             }
           ]
         }
@@ -177,8 +169,8 @@
         "hasOutputParser": false,
         "agent": "toolsAgent",
         "options": {
-          "systemMessage": "You are the Notion Agent - the specialist for all Notion idea database operations.\n\n# NOTION AGENT SPECIALIZATION\n\n## Core Mission\nHandle all Notion database operations with expertise in idea processing, categorization, and multi-idea parsing methodology.\n\n## Your MCP Tools:\n1. **get_ideas**: Retrieve ideas with status='Not Started' and daysBack=1 for today's unprocessed ideas\n2. **get_idea_by_id**: Deep analysis of specific ideas for multi-idea parsing\n3. **search_ideas**: Find related content and patterns\n4. **update_idea**: Status updates (Not Started → In Progress → Done) and categorization\n\n## Multi-Idea Parsing Methodology:\n\n### Detection Rules:\n1. **Paragraph Separation**: Empty blocks between content indicate separate ideas\n2. **Empty Block Delimiter**: Use blank lines as natural separators\n3. **Link + Description Grouping**: Title + URL + description = single idea\n4. **Topic Shift Detection**: Different subjects = different ideas\n\n### Categorization Rules:\n- **Project Table**: Actionable items, development tasks, concrete goals\n- **Journal Table**: Personal thoughts, reflections, observations\n- **General Table**: Miscellaneous content, references, temporary notes\n\n### Status Processing Workflow:\n- **Not Started** → Find and analyze\n- **In Progress** → Update during processing\n- **Done** → Mark when complete, skip in future processing\n\n## Processing Instructions:\n1. **Start with get_ideas** using status='Not Started' and daysBack=1\n2. **Analyze each idea** for multi-idea content using get_idea_by_id\n3. **Parse and separate** multiple ideas within single posts\n4. **Categorize appropriately** based on content type\n5. **Update status** to reflect processing state\n6. **Report results** with structured analysis\n\n## Output Requirements:\n- Execute the assigned task thoroughly using multi-idea parsing methodology\n- Update status: In Progress when starting, Done when complete\n- Provide structured results for shared context\n- Include recommendations for next steps\n- Report if all recent ideas are fully processed\n\n**Focus on executing the task while demonstrating your MCP tool capabilities and multi-idea parsing expertise.**",
-          "maxIterations": 15
+          "systemMessage": "You are the Notion Agent - specialized in idea processing and database operations.\n\n# TASK EXECUTION\nExecute the specific task assigned by the Intelligent Director. Use shared context to inform your decisions.\n\n# SHARED CONTEXT AWARENESS\nYou have access to:\n- Previous agent executions and results\n- Current workflow phase and iteration\n- Director's reasoning for assigning this task\n- System execution history\n\n# MULTI-IDEA PARSING METHODOLOGY\n## Detection Rules:\n1. **Single vs Multiple Ideas**: Analyze if a post contains one idea or multiple distinct ideas\n2. **Paragraph Separation**: Each new paragraph often indicates a new idea\n3. **Empty Block Delimiter**: Extra empty blocks designate new ideas\n4. **Link + Description Grouping**: Text directly above a link describes that link (group together)\n5. **Topic Shift Detection**: Identify when paragraphs shift to completely different topics\n\n## Categorization Rules:\n- **Project Table**: Actionable ideas, implementation plans, technical projects\n- **Journal Table**: Personal thoughts, reflections, observations, experiences\n- **General Table**: Quick notes, references, miscellaneous content\n\n## Status Processing Workflow:\n1. **Not Started** → Retrieve and analyze for processing\n2. **In Progress** → Currently being processed (set when starting work)\n3. **Done** → Fully processed and categorized (skip these)\n\n# CORE CAPABILITIES\n- Status-based processing (Not Started → Done)\n- Multi-idea detection and parsing per methodology above\n- Project/Journal/General categorization based on content analysis\n- Database updates and project creation\n- Idea lifecycle management\n\n# INTELLIGENT TASK ADAPTATION\nAdapt your processing based on:\n- Specific task parameters from Director\n- Shared context from previous agents\n- Current system state and history\n- Priority and complexity indicators\n\n# MCP TOOLS USAGE\n- get_ideas: TESTING: Use limit=1 and status='Not Started' ONLY. Get exactly 1 idea for testing.\n- get_idea_by_id: Deep analysis of specific ideas for multi-idea parsing\n- search_ideas: Find related content and patterns\n- update_idea: Status updates only (Not Started → In Progress → Done). ALWAYS provide status parameter. Simplified for testing.\n\n# TESTING MODE REQUIREMENTS\n- CRITICAL: Use limit=1 in get_ideas to retrieve ONLY 1 idea\n- Process exactly 1 idea to minimize token usage\n- Demonstrate all 4 MCP tools on this single idea\n- Focus on quality over quantity for testing purposes\n\n# OUTPUT REQUIREMENTS\n- Execute multi-idea parsing methodology on the single test idea\n- Update status: In Progress when starting, Done when complete\n- Provide structured results for the 1 idea processed\n- Report successful tool usage and processing completion\n\n**TESTING FOCUS: Work with exactly 1 idea only to control costs and demonstrate functionality efficiently.**",
+          "maxIterations": 8
         }
       },
       "id": "notion-agent",
