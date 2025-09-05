@@ -9,7 +9,18 @@ export interface NotionPage {
   url: string;
 }
 
-// Simplified idea structure for AI consumption
+// Generic database page structure
+export interface DatabasePage {
+  id: string;
+  title: string;
+  content: string;
+  properties: Record<string, any>;
+  createdAt: string;
+  lastEditedAt: string;
+  url: string;
+}
+
+// Simplified idea structure for AI consumption (maintains backward compatibility)
 export interface Idea {
   id: string;
   title: string;
@@ -21,7 +32,12 @@ export interface Idea {
   url: string;
 }
 
-// Update parameters
+// Generic update parameters
+export interface PageUpdate {
+  [propertyName: string]: any;
+}
+
+// Update parameters (maintains backward compatibility)
 export interface IdeaUpdate {
   title?: string;
   content?: string;
@@ -40,7 +56,29 @@ export interface GetIdeasOptions {
   filter?: string;
 }
 
+export interface GetPagesOptions {
+  limit?: number;
+  filter?: string;
+  status?: string;
+  daysBack?: number;
+}
+
+// Database configuration for different database types
+export interface DatabaseConfig {
+  id: string;
+  type: 'ideas' | 'projects' | 'generic';
+  propertyMappings: {
+    title: string;
+    content?: string;
+    status?: string;
+    tags?: string;
+    [key: string]: string | undefined;
+  };
+}
+
 // Validation schemas
+export const PageUpdateSchema = z.record(z.any());
+
 export const IdeaUpdateSchema = z.object({
   title: z.string().optional(),
   content: z.string().optional(),
@@ -56,4 +94,11 @@ export const SearchOptionsSchema = z.object({
 export const GetIdeasOptionsSchema = z.object({
   limit: z.number().min(1).max(100).optional(),
   filter: z.string().optional(),
+});
+
+export const GetPagesOptionsSchema = z.object({
+  limit: z.number().min(1).max(100).optional(),
+  filter: z.string().optional(),
+  status: z.string().optional(),
+  daysBack: z.number().min(0).optional(),
 }); 
