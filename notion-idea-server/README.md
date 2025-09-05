@@ -1,47 +1,137 @@
-# Notion Idea Server
+# Notion Multi-Database Server
 
-**TypeScript MCP Server for Notion Idea Management**
+**TypeScript MCP Server for Notion Database Management**
 
 ## Purpose
-This MCP server provides tools for managing and interacting with ideas stored in Notion databases. It offers read and update capabilities (no deletions) for AI assistants to access your idea collection.
+This MCP server provides tools for managing and interacting with **any** Notion database, not just ideas. It offers read and update capabilities (no deletions) for AI assistants to access your Notion databases with automatic property detection and flexible schema handling.
 
 ## Status
 ✅ **Ready for Configuration** - TypeScript implementation complete
 
 ## Features
-- **Read Operations**: Retrieve all ideas, get specific ideas by ID, search ideas
-- **Update Operations**: Update idea title, content, status, and tags
+- **Multi-Database Support**: Work with any Notion database, not just ideas
+- **Auto-Detection**: Automatically detects database schema and property mappings
+- **Legacy Compatibility**: Existing idea-specific endpoints continue to work
+- **Generic Operations**: Read, search, and update any database with flexible property handling
 - **Safe Design**: Read and update only - no deletion capabilities
-- **Flexible Property Mapping**: Automatically detects common Notion property names
 - **Type Safety**: Full TypeScript implementation with proper type definitions
 
-## Available Tools
+## API Endpoints
 
-### `get_ideas`
-Retrieve all ideas from your Notion database
+### Generic Database Endpoints (New)
+
+#### `GET /api/databases/:databaseId/pages`
+Get all pages from any Notion database
+- **Parameters**: 
+  - `limit` (optional): Max number of pages (default: 50)
+  - `filter` (optional): Search term to filter pages
+  - `status` (optional): Filter by status value
+  - `daysBack` (optional): Filter by last edited date
+
+#### `GET /api/databases/:databaseId/pages/:pageId`
+Get a specific page by ID from any database
+- **Parameters**: 
+  - `databaseId` (required): Notion database ID
+  - `pageId` (required): Notion page ID
+
+#### `POST /api/databases/:databaseId/search`
+Search pages in any database
+- **Body**: 
+  - `query` (required): Search term
+  - `limit` (optional): Max results (default: 20)
+
+#### `PUT /api/databases/:databaseId/pages/:pageId`
+Update a page in any database with flexible property updates
+- **Body**: Any valid Notion properties (auto-detected based on database schema)
+
+#### `GET /api/databases/:databaseId/schema`
+Get database schema and property information
+- Returns: Database structure, property types, and available fields
+
+#### `GET /api/databases/:databaseId/auto-config`
+Auto-detect optimal property mappings for a database
+- Returns: Suggested configuration for title, content, status, and tags properties
+
+#### `GET /api/databases/:databaseId/test-connection`
+Test connection to a specific database
+- Returns: Connection status and accessibility information
+
+### Legacy Idea Endpoints (Backward Compatible)
+
+#### `GET /api/ideas`
+Retrieve all ideas from your configured ideas database
 - **Parameters**: 
   - `limit` (optional): Max number of ideas (default: 50)
   - `filter` (optional): Search term to filter ideas
 
-### `get_idea_by_id`
+#### `GET /api/ideas/:id`
 Get a specific idea by its Notion page ID
-- **Parameters**: 
-  - `id` (required): Notion page ID
 
-### `search_ideas`
+#### `POST /api/ideas/search`
 Search ideas by title or content
-- **Parameters**: 
-  - `query` (required): Search term
-  - `limit` (optional): Max results (default: 20)
 
-### `update_idea`
+#### `PUT /api/ideas/:id`
 Update an existing idea
-- **Parameters**: 
-  - `id` (required): Notion page ID
+- **Body**: 
   - `title` (optional): New title
   - `content` (optional): New content/description
   - `status` (optional): New status
   - `tags` (optional): Array of tags
+
+## Usage Examples
+
+### Working with Ideas Database (Legacy)
+```bash
+# Get all ideas (uses configured NOTION_DATABASE_ID)
+curl http://localhost:3001/api/ideas
+
+# Get specific idea
+curl http://localhost:3001/api/ideas/12345678-1234-1234-1234-123456789abc
+
+# Update idea status
+curl -X PUT http://localhost:3001/api/ideas/12345678-1234-1234-1234-123456789abc \
+  -H "Content-Type: application/json" \
+  -d '{"status": "In Progress", "tags": ["urgent", "development"]}'
+```
+
+### Working with Any Database (New Generic API)
+```bash
+# Auto-detect database structure
+curl http://localhost:3001/api/databases/87654321-4321-4321-4321-210987654321/auto-config
+
+# Get all pages from projects database
+curl http://localhost:3001/api/databases/87654321-4321-4321-4321-210987654321/pages
+
+# Get specific page
+curl http://localhost:3001/api/databases/87654321-4321-4321-4321-210987654321/pages/12345678-1234-1234-1234-123456789abc
+
+# Update any property (auto-detected)
+curl -X PUT http://localhost:3001/api/databases/87654321-4321-4321-4321-210987654321/pages/12345678-1234-1234-1234-123456789abc \
+  -H "Content-Type: application/json" \
+  -d '{"Name": "Updated Project Title", "Status": "Complete", "Priority": "High"}'
+
+# Search in projects database
+curl -X POST http://localhost:3001/api/databases/87654321-4321-4321-4321-210987654321/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "machine learning", "limit": 10}'
+```
+
+### Multi-Agent Integration
+The generic endpoints are designed to work seamlessly with your multi-agent workflow:
+```javascript
+// Agent can work with any database dynamically
+const projectsDbId = "87654321-4321-4321-4321-210987654321";
+const ideasDbId = process.env.NOTION_DATABASE_ID;
+
+// Get ideas for processing
+const ideas = await fetch(`/api/databases/${ideasDbId}/pages?status=Not Started`);
+
+// Route processed ideas to projects database
+const projects = await fetch(`/api/databases/${projectsDbId}/pages`, {
+  method: 'POST',
+  body: JSON.stringify(processedIdea)
+});
+```
 
 ## Setup Instructions
 

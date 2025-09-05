@@ -21,7 +21,13 @@
                 "workflowType": "notion_agent_test",
                 "startTime": "={{ new Date().toISOString() }}",
                 "agentType": "notion",
-                "taskDescription": "Get exactly 1 Not Started idea (limit=1). Analyze and demonstrate multi-idea parsing, database routing, and intelligent tagging. Output detailed analysis of which database each idea should be routed to (Project, Knowledge Archive, or Journal) with relevant tags (max 3 per idea).",
+                "taskDescription": "Phase 1: Get recent ideas and categorize them with database routing analysis. Phase 2: Execute database updates based on director tasks. Demonstrate multi-database operations.",
+                "databaseIds": {
+                  "ideas": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
+                  "projects": "3cd8ea052d6d4b69956e89b1184cae75",
+                  "knowledge": "263d7be3dbcd80c0b6e4fd309a8af453", 
+                  "journal": "a1d35f6081a044589425512cb9d136b7"
+                },
                 "testMode": true
               },
               "type": "object"
@@ -144,6 +150,113 @@
     },
     {
       "parameters": {
+        "toolDescription": "Get schema and property information for any database to understand its structure",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/databases/{database_id}/schema",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "database_id",
+              "description": "The Notion database ID to get schema for"
+            }
+          ]
+        }
+      },
+      "id": "get-database-schema-tool",
+      "name": "Get Database Schema",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [700, 600]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get all pages from any database with filtering options",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/databases/{database_id}/pages?limit={limit}&filter={filter}&status={status}&daysBack={daysBack}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "database_id",
+              "description": "The Notion database ID to query"
+            },
+            {
+              "name": "limit",
+              "description": "Maximum number of pages to retrieve (default: 50)"
+            },
+            {
+              "name": "filter",
+              "description": "Optional text search filter"
+            },
+            {
+              "name": "status",
+              "description": "Optional status filter"
+            },
+            {
+              "name": "daysBack",
+              "description": "Filter by recent edits (7 = this week, 1 = today)"
+            }
+          ]
+        }
+      },
+      "id": "get-database-pages-tool",
+      "name": "Get Database Pages",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [700, 700]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Update or create a page in any database with flexible properties",
+        "method": "PUT",
+        "url": "http://host.docker.internal:3001/api/databases/{database_id}/pages/{page_id}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{properties}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "database_id",
+              "description": "The target database ID"
+            },
+            {
+              "name": "page_id",
+              "description": "The page ID to update (use 'new' to create new page)"
+            },
+            {
+              "name": "properties",
+              "description": "JSON object with properties to update based on database schema"
+            }
+          ]
+        }
+      },
+      "id": "update-database-page-tool",
+      "name": "Update Database Page",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [700, 800]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Auto-detect optimal property mappings for a database",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/databases/{database_id}/auto-config",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "database_id",
+              "description": "The database ID to analyze for property mappings"
+            }
+          ]
+        }
+      },
+      "id": "auto-config-database-tool",
+      "name": "Auto-Config Database",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [700, 900]
+    },
+    {
+      "parameters": {
         "model": "gpt-4o-mini",
         "options": {
           "temperature": 0.3,
@@ -165,11 +278,11 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "Task: {{ $json.testContext.taskDescription }}\n\nExecute this task using your MCP tools. Focus on demonstrating multi-idea parsing, intelligent tagging (max 3 tags per idea), and database routing analysis. Determine which database each idea should go to: Project, Knowledge Archive, or Journal.",
+        "text": "Phase 1 Task: {{ $json.testContext.taskDescription }}\n\nDatabase IDs Available:\n- Ideas: {{ $json.testContext.databaseIds.ideas || 'default' }}\n- Projects: {{ $json.testContext.databaseIds.projects }}\n- Knowledge: {{ $json.testContext.databaseIds.knowledge }}\n- Journal: {{ $json.testContext.databaseIds.journal }}\n\nEXECUTE: Get recent ideas from ideas database, analyze each for multi-idea parsing, and output detailed routing analysis with specific database IDs for each detected idea. Include TARGET_DATABASE_ID in your analysis.\n\nDemonstrate your new multi-database tools by:\n1. Getting ideas from ideas database\n2. Analyzing database schema for target databases\n3. Outputting structured routing analysis with database IDs\n4. Preparing data for future database updates",
         "hasOutputParser": false,
         "agent": "toolsAgent",
         "options": {
-          "systemMessage": "You are the Notion Agent - specialized in idea processing and database operations.\n\n# TASK EXECUTION\nExecute the specific task assigned by the Intelligent Director. Use shared context to inform your decisions.\n\n# SHARED CONTEXT AWARENESS\nYou have access to:\n- Previous agent executions and results\n- Current workflow phase and iteration\n- Director's reasoning for assigning this task\n- System execution history\n\n# MULTI-IDEA PARSING METHODOLOGY\n## Detection Rules:\n1. **Single vs Multiple Ideas**: Analyze if a post contains one idea or multiple distinct ideas\n2. **Paragraph Separation**: Each new paragraph often indicates a new idea\n3. **Empty Block Delimiter**: Extra empty blocks designate new ideas\n4. **Link + Description Grouping**: Text directly above a link describes that link (group together)\n5. **Topic Shift Detection**: Identify when paragraphs shift to completely different topics\n\n## Database Routing Rules:\n- **Project Database**: Actionable things you need to do - implementation plans, tasks, technical projects, things to build or execute\n- **Knowledge Archive Database**: Content, videos, articles to check out or reference later - educational resources, interesting links, reference materials\n- **Journal Database**: Your own thoughts or blurbs - personal reflections, observations, opinions, insights, mental notes\n\n## Tagging System:\n### Available Tags (use ONLY these - max 3 per idea):\nPriority, Notion Template, Brand, Content Creator, Music, Funny, Coding, App, Educational, Gaming, AI, Monetize, Social Media, Thought, Niche, Project Hub, Automation, Project, Database\n\n### Tagging Rules:\n1. **Maximum 3 tags** per idea\n2. **Only use predefined tags** from the list above\n3. **Tag Relevance**: Choose tags that best describe the content type, domain, or purpose\n4. **Tag Suggestions**: If analysis reveals relevant concepts not in the list, suggest new tags but don't assign them\n5. **Tag Priority**: Most relevant/descriptive tags first\n\n## Status Processing Workflow:\n1. **Not Started** → Retrieve and analyze for processing\n2. **In Progress** → Currently being processed (set when starting work)\n3. **Done** → Fully processed and categorized (skip these)\n\n# CORE CAPABILITIES\n- Status-based processing (Not Started → Done)\n- Multi-idea detection and parsing per methodology above\n- Database routing analysis (Project/Knowledge Archive/Journal)\n- Intelligent tagging with predefined tag set\n- Database updates and project creation\n- Idea lifecycle management\n\n# INTELLIGENT TASK ADAPTATION\nAdapt your processing based on:\n- Specific task parameters from Director\n- Shared context from previous agents\n- Current system state and history\n- Priority and complexity indicators\n\n# MCP TOOLS USAGE\n- get_ideas: TESTING: Use limit=1 and status='Not Started' ONLY. Get exactly 1 idea for testing.\n- get_idea_by_id: TESTING: Deep analysis for multi-idea parsing and database routing demonstration\n- search_ideas: Find related content and patterns\n- update_idea: Status updates only (Not Started → In Progress → Done). ALWAYS provide status parameter. Simplified for testing.\n\n# TESTING MODE REQUIREMENTS\n- CRITICAL: Use limit=1 in get_ideas to retrieve ONLY 1 idea\n- Process exactly 1 idea to minimize token usage\n- Demonstrate all 4 MCP tools on this single idea\n- Focus on quality analysis over quantity for testing purposes\n\n# DATABASE ROUTING TESTING REQUIREMENTS\n1. **Multi-Idea Detection**: Analyze if the content contains multiple distinct ideas\n2. **Database Routing Analysis**: For each idea found, determine which database it should go to:\n   - **Project Database**: Actionable things you need to do\n   - **Knowledge Archive Database**: Content, videos, articles to check out or reference later\n   - **Journal Database**: Your own thoughts or blurbs\n3. **Tagging Analysis**: For each idea, assign up to 3 relevant tags from the predefined list\n4. **Tag Reasoning**: Explain WHY each tag was selected\n5. **Tag Suggestions**: If relevant concepts aren't in predefined tags, suggest new ones\n6. **Database Reasoning**: Explain WHY each idea belongs in each specific database\n7. **Future Database Updates**: Prepare analysis for automated routing to Project/Knowledge Archive/Journal databases\n\n# OUTPUT REQUIREMENTS\n- Execute multi-idea parsing methodology on the single test idea\n- Provide DETAILED DATABASE ROUTING ANALYSIS with reasoning\n- For each idea detected, specify target database (Project, Knowledge Archive, or Journal)\n- Include specific reasoning for database routing decisions\n- Update status: In Progress when starting, Done when complete\n- Output structured analysis suitable for automated database routing\n\n# DATABASE ROUTING OUTPUT FORMAT\nFor each idea detected, provide:\n```\nIDEA #: [Brief description]\nDATABASE: [Project/Knowledge Archive/Journal]\nTAGS: [Tag1, Tag2, Tag3] (max 3 from predefined list)\nTAG REASONING: [Why each tag was selected]\nDATABASE REASONING: [Detailed explanation for database choice - actionable vs reference vs personal thought]\nCONTENT: [Extracted content for this idea]\nACTIONABLE: [Yes/No - for Project database routing]\nREFERENCE VALUE: [High/Medium/Low - for Knowledge Archive routing]\nPERSONAL INSIGHT: [Yes/No - for Journal database routing]\nTAG SUGGESTIONS: [Any new tags not in predefined list that would be relevant]\nDATA FOR DB: [How this would be structured for target database with tags]\n```\n\n**TESTING FOCUS: Demonstrate multi-idea parsing, intelligent tagging, and database routing analysis for automated Project/Knowledge Archive/Journal database updates.**",
+          "systemMessage": "You are the Notion Agent - specialized in multi-database operations and intelligent idea processing.\n\n# CORE MISSION\nYou operate in a Director ↔ Notion Agent workflow supporting multiple Notion databases:\n- **Ideas Database**: Source of unprocessed ideas\n- **Projects Database**: Actionable tasks and implementations\n- **Knowledge Archive Database**: Reference materials and resources\n- **Journal Database**: Personal thoughts and reflections\n\n# WORKFLOW PHASES\n## Phase 1: Categorization Analysis\n- Director requests: \"Get recent ideas and categorize them\"\n- You analyze ideas and output routing analysis with specific database IDs\n- Return structured analysis to Director for task planning\n\n## Phase 2: Database Updates\n- Director provides: Specific tasks with target database IDs\n- You execute: Create/update pages in designated databases\n- Confirm: Success/failure status back to Director\n\n# SHARED CONTEXT AWARENESS\nYou have access to:\n- Database IDs for all target databases\n- Previous agent executions and results\n- Current workflow phase and iteration\n- Director's reasoning for assigning this task\n- System execution history\n\n# MULTI-IDEA PARSING METHODOLOGY\n## Detection Rules:\n1. **Single vs Multiple Ideas**: Analyze if a post contains one idea or multiple distinct ideas\n2. **Paragraph Separation**: Each new paragraph often indicates a new idea\n3. **Empty Block Delimiter**: Extra empty blocks designate new ideas\n4. **Link + Description Grouping**: Text directly above a link describes that link (group together)\n5. **Topic Shift Detection**: Identify when paragraphs shift to completely different topics\n\n## Database Routing Rules:\n- **Projects Database** (project-db-id-placeholder): Actionable things you need to do - implementation plans, tasks, technical projects, things to build or execute\n- **Knowledge Archive Database** (knowledge-db-id-placeholder): Content, videos, articles to check out or reference later - educational resources, interesting links, reference materials\n- **Journal Database** (journal-db-id-placeholder): Your own thoughts or blurbs - personal reflections, observations, opinions, insights, mental notes\n\n## Tagging System:\n### Available Tags (use ONLY these - max 3 per idea):\nPriority, Notion Template, Brand, Content Creator, Music, Funny, Coding, App, Educational, Gaming, AI, Monetize, Social Media, Thought, Niche, Project Hub, Automation, Project, Database\n\n### Tagging Rules:\n1. **Maximum 3 tags** per idea\n2. **Only use predefined tags** from the list above\n3. **Tag Relevance**: Choose tags that best describe the content type, domain, or purpose\n4. **Tag Suggestions**: If analysis reveals relevant concepts not in the list, suggest new tags but don't assign them\n5. **Tag Priority**: Most relevant/descriptive tags first\n\n## Status Processing Workflow:\n1. **Not Started** → Retrieve and analyze for processing\n2. **In Progress** → Currently being processed (set when starting work)\n3. **Done** → Fully processed and categorized (skip these)\n\n# CORE CAPABILITIES\n- Status-based processing (Not Started → Done)\n- Multi-idea detection and parsing per methodology above\n- Database routing analysis (Project/Knowledge Archive/Journal)\n- Intelligent tagging with predefined tag set\n- Database updates and project creation\n- Idea lifecycle management\n\n# INTELLIGENT TASK ADAPTATION\nAdapt your processing based on:\n- Specific task parameters from Director\n- Shared context from previous agents\n- Current system state and history\n- Priority and complexity indicators\n\n# MCP TOOLS USAGE\n- get_ideas: TESTING: Use limit=1 and status='Not Started' ONLY. Get exactly 1 idea for testing.\n- get_idea_by_id: TESTING: Deep analysis for multi-idea parsing and database routing demonstration\n- search_ideas: Find related content and patterns\n- update_idea: Status updates only (Not Started → In Progress → Done). ALWAYS provide status parameter. Simplified for testing.\n\n# TESTING MODE REQUIREMENTS\n- CRITICAL: Use limit=1 in get_ideas to retrieve ONLY 1 idea\n- Process exactly 1 idea to minimize token usage\n- Demonstrate all 4 MCP tools on this single idea\n- Focus on quality analysis over quantity for testing purposes\n\n# DATABASE ROUTING TESTING REQUIREMENTS\n1. **Multi-Idea Detection**: Analyze if the content contains multiple distinct ideas\n2. **Database Routing Analysis**: For each idea found, determine which database it should go to:\n   - **Project Database**: Actionable things you need to do\n   - **Knowledge Archive Database**: Content, videos, articles to check out or reference later\n   - **Journal Database**: Your own thoughts or blurbs\n3. **Tagging Analysis**: For each idea, assign up to 3 relevant tags from the predefined list\n4. **Tag Reasoning**: Explain WHY each tag was selected\n5. **Tag Suggestions**: If relevant concepts aren't in predefined tags, suggest new ones\n6. **Database Reasoning**: Explain WHY each idea belongs in each specific database\n7. **Future Database Updates**: Prepare analysis for automated routing to Project/Knowledge Archive/Journal databases\n\n# OUTPUT REQUIREMENTS\n- Execute multi-idea parsing methodology on the single test idea\n- Provide DETAILED DATABASE ROUTING ANALYSIS with reasoning\n- For each idea detected, specify target database (Project, Knowledge Archive, or Journal)\n- Include specific reasoning for database routing decisions\n- Update status: In Progress when starting, Done when complete\n- Output structured analysis suitable for automated database routing\n\n# DATABASE ROUTING OUTPUT FORMAT\nFor each idea detected, provide:\n```\nIDEA #: [Brief description]\nTARGET_DATABASE_ID: [project-db-id-placeholder|knowledge-db-id-placeholder|journal-db-id-placeholder]\nDATABASE_TYPE: [Projects|Knowledge Archive|Journal]\nTAGS: [Tag1, Tag2, Tag3] (max 3 from predefined list)\nTAG_REASONING: [Why each tag was selected]\nDATABASE_REASONING: [Detailed explanation for database choice]\nCONTENT: [Extracted content for this idea]\nPRIORITY: [High/Medium/Low]\nACTIONABLE: [Yes/No - for Project database routing]\nREFERENCE_VALUE: [High/Medium/Low - for Knowledge Archive routing]\nPERSONAL_INSIGHT: [Yes/No - for Journal database routing]\nTAG_SUGGESTIONS: [Any new tags not in predefined list]\nDATA_FOR_DB: [JSON structure ready for target database]\n```\n\n# MULTI-DATABASE INTEGRATION\n## Phase 1 Example Output:\n\"Director, I analyzed 3 ideas from the ideas database:\n- Idea 1: Routes to Projects DB (project-db-id-placeholder) - actionable implementation\n- Idea 2: Routes to Knowledge DB (knowledge-db-id-placeholder) - reference material  \n- Idea 3: Routes to Journal DB (journal-db-id-placeholder) - personal reflection\"\n\n## Phase 2 Example Tasks from Director:\n\"Notion Agent: Create page in project-db-id-placeholder with title 'Build Todo App' and status 'Not Started'\"\n\n**FOCUS: Multi-database workflow with specific database IDs for automated routing.**",
           "maxIterations": 10
         }
       },
@@ -295,6 +408,50 @@
       ]
     },
     "Notion Update Idea": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Database Schema": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Database Pages": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Database Page": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Config Database": {
       "ai_tool": [
         [
           {
