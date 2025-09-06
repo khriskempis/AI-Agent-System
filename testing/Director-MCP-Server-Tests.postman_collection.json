@@ -1,0 +1,450 @@
+{
+	"info": {
+		"_postman_id": "director-mcp-server-tests",
+		"name": "Director MCP Server - Complete Test Suite",
+		"description": "Comprehensive test collection for Director MCP Server functionality including template loading, instruction creation, agent communication, and workflow execution.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "director_base_url",
+			"value": "http://localhost:3002",
+			"type": "string"
+		},
+		{
+			"key": "n8n_base_url",
+			"value": "http://localhost:5678",
+			"type": "string"
+		},
+		{
+			"key": "notion_mcp_url",
+			"value": "http://localhost:3001",
+			"type": "string"
+		},
+		{
+			"key": "test_database_id",
+			"value": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
+			"type": "string"
+		},
+		{
+			"key": "projects_database_id",
+			"value": "3cd8ea052d6d4b69956e89b1184cae75",
+			"type": "string"
+		},
+		{
+			"key": "knowledge_database_id",
+			"value": "263d7be3dbcd80c0b6e4fd309a8af453",
+			"type": "string"
+		},
+		{
+			"key": "journal_database_id",
+			"value": "a1d35f6081a044589425512cb9d136b7",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Health Checks",
+			"item": [
+				{
+					"name": "Director MCP Server Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{director_base_url}}/health",
+							"host": ["{{director_base_url}}"],
+							"path": ["health"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Notion MCP Server Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{notion_mcp_url}}/health",
+							"host": ["{{notion_mcp_url}}"],
+							"path": ["health"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "All Agents Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{director_base_url}}/api/agents/health",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "agents", "health"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. MCP Tools (Core Director Functions)",
+			"item": [
+				{
+					"name": "Get Workflow Template - Idea Categorization",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_type\": \"idea_categorization\",\n  \"parameters\": {\n    \"limit\": 5\n  },\n  \"cache_duration\": 3600\n}"
+						},
+						"url": {
+							"raw": "{{director_base_url}}/api/mcp/get-workflow-template",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "mcp", "get-workflow-template"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Agent Instructions - Categorization",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_type\": \"idea_categorization\",\n  \"target_agent\": \"notion\",\n  \"parameters\": {\n    \"source_database_id\": \"{{test_database_id}}\",\n    \"projects_database_id\": \"{{projects_database_id}}\",\n    \"knowledge_database_id\": \"{{knowledge_database_id}}\",\n    \"journal_database_id\": \"{{journal_database_id}}\",\n    \"limit\": 1\n  }\n}"
+						},
+						"url": {
+							"raw": "{{director_base_url}}/api/mcp/create-agent-instructions",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "mcp", "create-agent-instructions"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Execute Full Workflow - Categorization",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_type\": \"idea_categorization\",\n  \"target_agent\": \"notion\",\n  \"parameters\": {\n    \"source_database_id\": \"{{test_database_id}}\",\n    \"projects_database_id\": \"{{projects_database_id}}\",\n    \"knowledge_database_id\": \"{{knowledge_database_id}}\",\n    \"journal_database_id\": \"{{journal_database_id}}\",\n    \"limit\": 1\n  }\n}"
+						},
+						"url": {
+							"raw": "{{director_base_url}}/api/mcp/execute-workflow",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "mcp", "execute-workflow"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. Agent Communication Tests",
+			"item": [
+				{
+					"name": "Send Instructions to Notion Agent (Direct)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Director-Task-ID",
+								"value": "test_direct_001"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"agent_id\": \"notion\",\n  \"task_id\": \"test_direct_001\",\n  \"workflow_id\": \"idea_categorization_v1\",\n  \"phase\": \"categorization_analysis\",\n  \"timestamp\": \"{{$timestamp}}\",\n  \"instruction\": {\n    \"task_type\": \"multi_idea_categorization\",\n    \"objective\": \"Parse content for multiple distinct ideas and categorize each into appropriate target databases\",\n    \"source_database_id\": \"{{test_database_id}}\",\n    \"limit\": 1,\n    \"status_filter\": \"Not Started\"\n  },\n  \"categorization_methodology\": {\n    \"multi_idea_parsing_rules\": [\n      \"Paragraph Separation: Each paragraph may contain a distinct idea\",\n      \"Empty Block Delimiter: Extra empty blocks separate ideas\",\n      \"Link + Description Grouping: Text above links describes that link\",\n      \"Topic Shift Detection: Identify complete topic changes\"\n    ],\n    \"database_routing_criteria\": {\n      \"projects\": {\n        \"database_id\": \"{{projects_database_id}}\",\n        \"description\": \"Actionable tasks, implementations, things to build or execute\",\n        \"keywords\": [\"build\", \"create\", \"implement\", \"develop\", \"task\", \"action\"],\n        \"examples\": [\"Build Todo App\", \"Create automation script\"]\n      },\n      \"knowledge\": {\n        \"database_id\": \"{{knowledge_database_id}}\",\n        \"description\": \"Reference materials, articles, videos, educational content\",\n        \"keywords\": [\"article\", \"video\", \"reference\", \"learn\", \"tutorial\"],\n        \"examples\": [\"Interesting article about AI\", \"Tutorial video\"]\n      },\n      \"journal\": {\n        \"database_id\": \"{{journal_database_id}}\",\n        \"description\": \"Personal thoughts, reflections, observations, insights\",\n        \"keywords\": [\"thought\", \"reflection\", \"personal\", \"opinion\"],\n        \"examples\": [\"My thoughts on...\", \"Personal reflection\"]\n      }\n    },\n    \"tagging_rules\": {\n      \"max_tags\": 3,\n      \"predefined_only\": true,\n      \"available_tags\": [\"Priority\", \"Coding\", \"AI\", \"Educational\", \"Project\", \"Automation\"],\n      \"selection_criteria\": \"Choose tags that best describe content type and purpose\"\n    }\n  },\n  \"execution_requirements\": {\n    \"required_tools\": [\"get_ideas\", \"get_idea_by_id\"],\n    \"timeout_seconds\": 180,\n    \"response_format\": \"categorization_results_json\",\n    \"processing_approach\": \"Parse each retrieved idea for multiple concepts and return structured analysis\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{director_base_url}}/api/agents/notion/execute",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "agents", "notion", "execute"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Test n8n Director Integration Webhook",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"agent_id\": \"notion\",\n  \"task_id\": \"webhook_test_001\",\n  \"workflow_id\": \"idea_categorization_v1\",\n  \"phase\": \"categorization_analysis\",\n  \"timestamp\": \"{{$timestamp}}\",\n  \"instruction\": {\n    \"task_type\": \"multi_idea_categorization\",\n    \"objective\": \"Test Director → n8n Agent communication flow\",\n    \"source_database_id\": \"{{test_database_id}}\",\n    \"limit\": 1,\n    \"status_filter\": \"Not Started\"\n  },\n  \"categorization_methodology\": {\n    \"multi_idea_parsing_rules\": [\n      \"Paragraph Separation: Each paragraph may contain a distinct idea\",\n      \"Topic Shift Detection: Identify complete topic changes\"\n    ],\n    \"database_routing_criteria\": {\n      \"projects\": {\n        \"database_id\": \"{{projects_database_id}}\",\n        \"description\": \"Actionable tasks and implementations\",\n        \"keywords\": [\"build\", \"create\", \"implement\"],\n        \"examples\": [\"Build Todo App\"]\n      }\n    },\n    \"tagging_rules\": {\n      \"max_tags\": 3,\n      \"available_tags\": [\"Priority\", \"Coding\", \"AI\"]\n    }\n  },\n  \"execution_requirements\": {\n    \"required_tools\": [\"get_ideas\"],\n    \"timeout_seconds\": 180,\n    \"response_format\": \"categorization_results_json\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{n8n_base_url}}/webhook/director-test",
+							"host": ["{{n8n_base_url}}"],\n							"path": ["webhook", "director-test"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Check Notion Agent Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{director_base_url}}/api/agents/notion/health",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "agents", "notion", "health"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4. Context Management",
+			"item": [
+				{
+					"name": "List Active Contexts",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{director_base_url}}/api/context",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "context"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Specific Context",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{director_base_url}}/api/context/ctx_example123",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "context", "ctx_example123"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Context for Agent",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{director_base_url}}/api/context/ctx_example123/agent/notion",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "context", "ctx_example123", "agent", "notion"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Agent Response",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"agent_id\": \"notion\",\n  \"task_id\": \"test_context_001\",\n  \"phase\": \"categorization_complete\",\n  \"timestamp\": \"{{$timestamp}}\",\n  \"execution_time_ms\": 45000,\n  \"results\": {\n    \"ideas_processed\": [\n      {\n        \"idea_id\": \"test123\",\n        \"title\": \"Test Idea\",\n        \"target_database\": \"projects\",\n        \"target_database_id\": \"{{projects_database_id}}\",\n        \"tags\": [\"Project\", \"AI\"],\n        \"priority\": \"high\",\n        \"reasoning\": \"This is a test categorization\"\n      }\n    ],\n    \"summary\": {\n      \"total_processed\": 1,\n      \"projects\": 1,\n      \"knowledge\": 0,\n      \"journal\": 0\n    }\n  },\n  \"status\": {\n    \"success\": true,\n    \"errors\": [],\n    \"next_phase\": \"execution_planning\"\n  },\n  \"context_updates\": {\n    \"api_calls\": 2,\n    \"tools_used\": [\"get_ideas\", \"get_idea_by_id\"],\n    \"performance_notes\": \"Processing completed successfully\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{director_base_url}}/api/agents/response?context_id=ctx_example123",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "agents", "response"],
+							"query": [
+								{
+									"key": "context_id",
+									"value": "ctx_example123"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "5. System Management",
+			"item": [
+				{
+					"name": "Get System Statistics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{director_base_url}}/api/stats",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "stats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Clear Template Cache",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{director_base_url}}/api/admin/clear-cache",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "admin", "clear-cache"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "6. Integration Tests",
+			"item": [
+				{
+					"name": "Test Database Update Instructions",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_type\": \"database_updates\",\n  \"target_agent\": \"notion\",\n  \"parameters\": {\n    \"operations\": [\n      {\n        \"action\": \"create_page\",\n        \"target_database_id\": \"{{projects_database_id}}\",\n        \"page_id\": \"new\",\n        \"properties\": {\n          \"Name\": \"Test Project from Director\",\n          \"Status\": \"Not Started\",\n          \"Priority\": \"High\",\n          \"Tags\": [\"Director\", \"Test\"]\n        }\n      }\n    ]\n  }\n}"
+						},
+						"url": {
+							"raw": "{{director_base_url}}/api/mcp/create-agent-instructions",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "mcp", "create-agent-instructions"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Test Error Handling - Invalid Workflow",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_type\": \"nonexistent_workflow\",\n  \"parameters\": {}\n}"
+						},
+						"url": {
+							"raw": "{{director_base_url}}/api/mcp/get-workflow-template",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "mcp", "get-workflow-template"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Test Content Processing Instructions",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_type\": \"content_processing\",\n  \"target_agent\": \"notion\",\n  \"parameters\": {\n    \"content_source\": \"ideas_database\",\n    \"processing_rules\": [\n      \"Extract key concepts\",\n      \"Identify actionable items\",\n      \"Apply consistent formatting\"\n    ],\n    \"output_format\": \"structured_content\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{director_base_url}}/api/mcp/create-agent-instructions",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "mcp", "create-agent-instructions"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "7. Performance Tests",
+			"item": [
+				{
+					"name": "Large Workflow Template Load",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_type\": \"idea_categorization\",\n  \"parameters\": {\n    \"limit\": 10,\n    \"include_debug_info\": true,\n    \"detailed_analysis\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{director_base_url}}/api/mcp/get-workflow-template",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "mcp", "get-workflow-template"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Batch Agent Instructions",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_type\": \"idea_categorization\",\n  \"target_agent\": \"notion\",\n  \"parameters\": {\n    \"source_database_id\": \"{{test_database_id}}\",\n    \"limit\": 5,\n    \"batch_processing\": true,\n    \"parallel_execution\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{director_base_url}}/api/mcp/create-agent-instructions",
+							"host": ["{{director_base_url}}"],
+							"path": ["api", "mcp", "create-agent-instructions"]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

@@ -11,6 +11,152 @@
     },
     {
       "parameters": {
+        "httpMethod": "GET",
+        "path": "notion-agent-health",
+        "options": {}
+      },
+      "id": "webhook-health",
+      "name": "Webhook Health Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 180]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notion-agent-execute",
+        "options": {}
+      },
+      "id": "webhook-execute",
+      "name": "Webhook Execute",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 420]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "notion-agent-status",
+        "options": {}
+      },
+      "id": "webhook-status",
+      "name": "Webhook Status",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 540]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "health-response",
+              "name": "healthResponse",
+              "value": {
+                "agent_id": "notion",
+                "status": "healthy",
+                "timestamp": "={{ new Date().toISOString() }}",
+                "services": {
+                  "mcp_tools": "active",
+                  "notion_api": "active", 
+                  "database_access": "active"
+                },
+                "capabilities": [
+                  "get_ideas",
+                  "search_ideas", 
+                  "update_idea",
+                  "multi_idea_parsing",
+                  "categorization"
+                ],
+                "last_activity": "={{ new Date().toISOString() }}",
+                "version": "1.0.0"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "health-response",
+      "name": "Health Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.healthResponse) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "health-webhook-response",
+      "name": "Health Webhook Response",  
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 180]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "status-response",
+              "name": "statusResponse",
+              "value": {
+                "agent_id": "notion",
+                "current_status": "ready",
+                "timestamp": "={{ new Date().toISOString() }}",
+                "active_tasks": 0,
+                "total_executions": "{{ Math.floor(Math.random() * 100) }}",
+                "last_execution": "={{ new Date(Date.now() - Math.floor(Math.random() * 3600000)).toISOString() }}",
+                "performance": {
+                  "avg_response_time_ms": "{{ Math.floor(Math.random() * 2000) + 500 }}",
+                  "success_rate": 0.95,
+                  "cache_hit_rate": 0.78
+                }
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "status-response",
+      "name": "Status Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 540]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.statusResponse) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "status-webhook-response",
+      "name": "Status Webhook Response",  
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 540]
+    },
+    {
+      "parameters": {
         "assignments": {
           "assignments": [
             {
@@ -21,13 +167,65 @@
                 "workflowType": "notion_agent_test",
                 "startTime": "={{ new Date().toISOString() }}",
                 "agentType": "notion",
-                "taskDescription": "Phase 1: Get recent ideas and categorize them with database routing analysis. Phase 2: Execute database updates based on director tasks. Demonstrate multi-database operations.",
-                "databaseIds": {
-                  "ideas": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
-                  "projects": "3cd8ea052d6d4b69956e89b1184cae75",
-                  "knowledge": "263d7be3dbcd80c0b6e4fd309a8af453", 
-                  "journal": "a1d35f6081a044589425512cb9d136b7"
+                "instruction": {
+                  "task_type": "multi_idea_categorization",
+                  "objective": "Parse content for multiple distinct ideas and categorize each into appropriate target databases",
+                  "source_database_id": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
+                  "limit": 1,
+                  "status_filter": "Not Started"
                 },
+                "categorization_methodology": {
+                  "multi_idea_parsing_rules": [
+                    "Paragraph Separation: Each paragraph may contain a distinct idea",
+                    "Empty Block Delimiter: Extra empty blocks separate ideas", 
+                    "Link + Description Grouping: Text above links describes that link",
+                    "Topic Shift Detection: Identify complete topic changes",
+                    "Context Preservation: Maintain original meaning and intent"
+                  ],
+                  "database_routing_criteria": {
+                    "projects": {
+                      "database_id": "3cd8ea052d6d4b69956e89b1184cae75",
+                      "description": "Actionable tasks, implementations, things to build or execute",
+                      "keywords": ["build", "create", "implement", "develop", "task", "action"],
+                      "criteria": "actionable_items",
+                      "examples": ["Build Todo App", "Create automation script", "Implement feature X"]
+                    },
+                    "knowledge": {
+                      "database_id": "263d7be3dbcd80c0b6e4fd309a8af453", 
+                      "description": "Reference materials, articles, videos, educational content",
+                      "keywords": ["article", "video", "reference", "learn", "tutorial", "guide"],
+                      "criteria": "reference_materials",
+                      "examples": ["Interesting article about AI", "Tutorial video", "Research paper"]
+                    },
+                    "journal": {
+                      "database_id": "a1d35f6081a044589425512cb9d136b7",
+                      "description": "Personal thoughts, reflections, observations, insights",
+                      "keywords": ["thought", "reflection", "personal", "opinion", "insight"],
+                      "criteria": "personal_insights", 
+                      "examples": ["My thoughts on...", "Personal reflection", "Opinion about..."]
+                    }
+                  },
+                  "tagging_rules": {
+                    "max_tags": 3,
+                    "predefined_only": true,
+                    "available_tags": ["Priority", "Notion Template", "Brand", "Content Creator", "Music", "Funny", "Coding", "App", "Educational", "Gaming", "AI", "Monetize", "Social Media", "Thought", "Niche", "Project Hub", "Automation", "Project", "Database"],
+                    "selection_criteria": "Choose tags that best describe content type, domain, or purpose - most relevant first"
+                  },
+                  "analysis_requirements": {
+                    "assess_actionability": "Determine if idea requires action (Yes/No)",
+                    "evaluate_reference_value": "Rate reference value (High/Medium/Low)",
+                    "identify_personal_insight": "Check if contains personal thoughts (Yes/No)",
+                    "assign_priority": "Set priority level (High/Medium/Low)",
+                    "provide_reasoning": "Explain categorization decision in 1-2 sentences"
+                  }
+                },
+                "execution_requirements": {
+                  "required_tools": ["get_ideas", "get_idea_by_id"],
+                  "timeout_seconds": 180,
+                  "response_format": "categorization_results_json",
+                  "processing_approach": "Parse each retrieved idea for multiple concepts, apply categorization rules to each parsed idea, return structured analysis"
+                },
+                "task_id": "cat_test_001",
                 "testMode": true
               },
               "type": "object"
@@ -101,7 +299,7 @@
         "url": "http://host.docker.internal:3001/api/ideas/search",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n  \"query\": \"{query}\",\n  \"limit\": {limit}\n}",
+        "jsonBody": "={{ {\n  \"query\": \"{query}\",\n  \"limit\": {limit}\n} }}",
         "placeholderDefinitions": {
           "values": [
             {
@@ -128,7 +326,7 @@
         "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\"status\": \"{status}\"}",
+        "jsonBody": "={{ {\"status\": \"{status}\"} }}",
         "placeholderDefinitions": {
           "values": [
             {
@@ -211,7 +409,7 @@
         "url": "http://host.docker.internal:3001/api/databases/{database_id}/pages/{page_id}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{properties}",
+        "jsonBody": "={{ {properties} }}",
         "placeholderDefinitions": {
           "values": [
             {
@@ -257,6 +455,16 @@
     },
     {
       "parameters": {
+        "jsCode": "// Generic Director Instructions Parser\n// Converts JSON instructions from Director into readable text for LLM\n\nconst directorInstructions = $json.testContext || $json;\n\n// Extract task type and format dynamically\nconst taskType = directorInstructions.instruction?.task_type || 'unknown_task';\nconst taskTitle = taskType.replace(/_/g, ' ').toUpperCase();\n\n// Generic instruction builder\nfunction buildInstructionText(instructions) {\n  let text = `${taskTitle}\\n\\n`;\n  \n  // Core instruction section (always present)\n  if (instructions.instruction?.objective) {\n    text += `OBJECTIVE: ${instructions.instruction.objective}\\n\\n`;\n  }\n  \n  // Dynamic sections based on what's present in JSON\n  if (instructions.instruction?.source_database_id) {\n    text += `SOURCE DATABASE:\\n`;\n    text += `• Database ID: ${instructions.instruction.source_database_id}\\n`;\n    if (instructions.instruction.limit) text += `• Limit: ${instructions.instruction.limit}\\n`;\n    if (instructions.instruction.status_filter) text += `• Status Filter: ${instructions.instruction.status_filter}\\n`;\n    text += `\\n`;\n  }\n  \n  // Categorization methodology (for categorization tasks)\n  if (instructions.categorization_methodology) {\n    text += buildCategorizationSection(instructions.categorization_methodology);\n  }\n  \n  // Database execution instructions (for update tasks)\n  if (instructions.database_execution) {\n    text += buildDatabaseExecutionSection(instructions.database_execution);\n  }\n  \n  // Content processing rules (for content tasks)\n  if (instructions.content_processing) {\n    text += buildContentProcessingSection(instructions.content_processing);\n  }\n  \n  // Execution requirements (always present)\n  if (instructions.execution_requirements) {\n    text += `EXECUTION REQUIREMENTS:\\n`;\n    if (instructions.execution_requirements.required_tools) {\n      text += `• Required Tools: ${instructions.execution_requirements.required_tools.join(', ')}\\n`;\n    }\n    if (instructions.execution_requirements.timeout_seconds) {\n      text += `• Timeout: ${instructions.execution_requirements.timeout_seconds} seconds\\n`;\n    }\n    if (instructions.execution_requirements.response_format) {\n      text += `• Response Format: ${instructions.execution_requirements.response_format}\\n`;\n    }\n    if (instructions.execution_requirements.processing_approach) {\n      text += `• Processing Approach: ${instructions.execution_requirements.processing_approach}\\n`;\n    }\n    text += `\\n`;\n  }\n  \n  return text;\n}\n\n// Helper functions for different section types\nfunction buildCategorizationSection(methodology) {\n  let text = `MULTI-IDEA PARSING RULES:\\n`;\n  if (methodology.multi_idea_parsing_rules) {\n    methodology.multi_idea_parsing_rules.forEach(rule => {\n      text += `• ${rule}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  if (methodology.database_routing_criteria) {\n    text += `DATABASE ROUTING CRITERIA:\\n\\n`;\n    Object.entries(methodology.database_routing_criteria).forEach(([dbType, criteria]) => {\n      text += `${dbType.toUpperCase()} DATABASE (${criteria.database_id}):\\n`;\n      text += `• Description: ${criteria.description}\\n`;\n      if (criteria.keywords) text += `• Keywords: ${criteria.keywords.join(', ')}\\n`;\n      if (criteria.examples) text += `• Examples: ${criteria.examples.join(', ')}\\n`;\n      text += `\\n`;\n    });\n  }\n  \n  if (methodology.tagging_rules) {\n    text += `TAGGING RULES:\\n`;\n    text += `• Maximum Tags: ${methodology.tagging_rules.max_tags}\\n`;\n    if (methodology.tagging_rules.available_tags) {\n      text += `• Available Tags: ${methodology.tagging_rules.available_tags.join(', ')}\\n`;\n    }\n    if (methodology.tagging_rules.selection_criteria) {\n      text += `• Selection Criteria: ${methodology.tagging_rules.selection_criteria}\\n`;\n    }\n    text += `\\n`;\n  }\n  \n  if (methodology.analysis_requirements) {\n    text += `ANALYSIS REQUIREMENTS:\\n`;\n    Object.entries(methodology.analysis_requirements).forEach(([key, value]) => {\n      text += `• ${key.replace(/_/g, ' ')}: ${value}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  return text;\n}\n\nfunction buildDatabaseExecutionSection(execution) {\n  let text = `DATABASE EXECUTION INSTRUCTIONS:\\n\\n`;\n  \n  if (execution.operations) {\n    text += `OPERATIONS TO PERFORM:\\n`;\n    execution.operations.forEach((op, index) => {\n      text += `${index + 1}. ${op.action.toUpperCase()}\\n`;\n      text += `   • Target Database: ${op.target_database_id}\\n`;\n      text += `   • Page ID: ${op.page_id || 'new'}\\n`;\n      if (op.properties) {\n        text += `   • Properties to Update:\\n`;\n        Object.entries(op.properties).forEach(([key, value]) => {\n          text += `     - ${key}: ${value}\\n`;\n        });\n      }\n      text += `\\n`;\n    });\n  }\n  \n  if (execution.validation_rules) {\n    text += `VALIDATION RULES:\\n`;\n    Object.entries(execution.validation_rules).forEach(([key, value]) => {\n      text += `• ${key.replace(/_/g, ' ')}: ${value}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  return text;\n}\n\nfunction buildContentProcessingSection(processing) {\n  let text = `CONTENT PROCESSING RULES:\\n`;\n  \n  if (processing.parsing_rules) {\n    processing.parsing_rules.forEach(rule => {\n      text += `• ${rule}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  if (processing.transformation_rules) {\n    text += `TRANSFORMATION RULES:\\n`;\n    processing.transformation_rules.forEach(rule => {\n      text += `• ${rule}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  return text;\n}\n\n// Build the instruction text\nconst instructionText = buildInstructionText(directorInstructions);\n\n// For backwards compatibility with current test format\nconst testContext = directorInstructions.testContext || directorInstructions;\n\n// Return parsed data\nreturn [{ \n  instructionText, \n  originalJSON: directorInstructions,\n  taskType: directorInstructions.instruction?.task_type || 'test_task',\n  testContext: testContext // Maintain compatibility\n}];"
+      },
+      "id": "parse-director-instructions",
+      "name": "Parse Director Instructions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
         "model": "gpt-4o-mini",
         "options": {
           "temperature": 0.3,
@@ -278,11 +486,11 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "Phase 1 Task: {{ $json.testContext.taskDescription }}\n\nDatabase IDs Available:\n- Ideas: {{ $json.testContext.databaseIds.ideas || 'default' }}\n- Projects: {{ $json.testContext.databaseIds.projects }}\n- Knowledge: {{ $json.testContext.databaseIds.knowledge }}\n- Journal: {{ $json.testContext.databaseIds.journal }}\n\nEXECUTE: Get recent ideas from ideas database, analyze each for multi-idea parsing, and output detailed routing analysis with specific database IDs for each detected idea. Include TARGET_DATABASE_ID in your analysis.\n\nDemonstrate your new multi-database tools by:\n1. Getting ideas from ideas database\n2. Analyzing database schema for target databases\n3. Outputting structured routing analysis with database IDs\n4. Preparing data for future database updates",
+        "text": "{{ $json.instructionText }}",
         "hasOutputParser": false,
         "agent": "toolsAgent",
         "options": {
-          "systemMessage": "You are the Notion Agent - specialized in multi-database operations and intelligent idea processing.\n\n# CORE MISSION\nYou operate in a Director ↔ Notion Agent workflow supporting multiple Notion databases:\n- **Ideas Database**: Source of unprocessed ideas\n- **Projects Database**: Actionable tasks and implementations\n- **Knowledge Archive Database**: Reference materials and resources\n- **Journal Database**: Personal thoughts and reflections\n\n# WORKFLOW PHASES\n## Phase 1: Categorization Analysis\n- Director requests: \"Get recent ideas and categorize them\"\n- You analyze ideas and output routing analysis with specific database IDs\n- Return structured analysis to Director for task planning\n\n## Phase 2: Database Updates\n- Director provides: Specific tasks with target database IDs\n- You execute: Create/update pages in designated databases\n- Confirm: Success/failure status back to Director\n\n# SHARED CONTEXT AWARENESS\nYou have access to:\n- Database IDs for all target databases\n- Previous agent executions and results\n- Current workflow phase and iteration\n- Director's reasoning for assigning this task\n- System execution history\n\n# MULTI-IDEA PARSING METHODOLOGY\n## Detection Rules:\n1. **Single vs Multiple Ideas**: Analyze if a post contains one idea or multiple distinct ideas\n2. **Paragraph Separation**: Each new paragraph often indicates a new idea\n3. **Empty Block Delimiter**: Extra empty blocks designate new ideas\n4. **Link + Description Grouping**: Text directly above a link describes that link (group together)\n5. **Topic Shift Detection**: Identify when paragraphs shift to completely different topics\n\n## Database Routing Rules:\n- **Projects Database** (project-db-id-placeholder): Actionable things you need to do - implementation plans, tasks, technical projects, things to build or execute\n- **Knowledge Archive Database** (knowledge-db-id-placeholder): Content, videos, articles to check out or reference later - educational resources, interesting links, reference materials\n- **Journal Database** (journal-db-id-placeholder): Your own thoughts or blurbs - personal reflections, observations, opinions, insights, mental notes\n\n## Tagging System:\n### Available Tags (use ONLY these - max 3 per idea):\nPriority, Notion Template, Brand, Content Creator, Music, Funny, Coding, App, Educational, Gaming, AI, Monetize, Social Media, Thought, Niche, Project Hub, Automation, Project, Database\n\n### Tagging Rules:\n1. **Maximum 3 tags** per idea\n2. **Only use predefined tags** from the list above\n3. **Tag Relevance**: Choose tags that best describe the content type, domain, or purpose\n4. **Tag Suggestions**: If analysis reveals relevant concepts not in the list, suggest new tags but don't assign them\n5. **Tag Priority**: Most relevant/descriptive tags first\n\n## Status Processing Workflow:\n1. **Not Started** → Retrieve and analyze for processing\n2. **In Progress** → Currently being processed (set when starting work)\n3. **Done** → Fully processed and categorized (skip these)\n\n# CORE CAPABILITIES\n- Status-based processing (Not Started → Done)\n- Multi-idea detection and parsing per methodology above\n- Database routing analysis (Project/Knowledge Archive/Journal)\n- Intelligent tagging with predefined tag set\n- Database updates and project creation\n- Idea lifecycle management\n\n# INTELLIGENT TASK ADAPTATION\nAdapt your processing based on:\n- Specific task parameters from Director\n- Shared context from previous agents\n- Current system state and history\n- Priority and complexity indicators\n\n# MCP TOOLS USAGE\n- get_ideas: TESTING: Use limit=1 and status='Not Started' ONLY. Get exactly 1 idea for testing.\n- get_idea_by_id: TESTING: Deep analysis for multi-idea parsing and database routing demonstration\n- search_ideas: Find related content and patterns\n- update_idea: Status updates only (Not Started → In Progress → Done). ALWAYS provide status parameter. Simplified for testing.\n\n# TESTING MODE REQUIREMENTS\n- CRITICAL: Use limit=1 in get_ideas to retrieve ONLY 1 idea\n- Process exactly 1 idea to minimize token usage\n- Demonstrate all 4 MCP tools on this single idea\n- Focus on quality analysis over quantity for testing purposes\n\n# DATABASE ROUTING TESTING REQUIREMENTS\n1. **Multi-Idea Detection**: Analyze if the content contains multiple distinct ideas\n2. **Database Routing Analysis**: For each idea found, determine which database it should go to:\n   - **Project Database**: Actionable things you need to do\n   - **Knowledge Archive Database**: Content, videos, articles to check out or reference later\n   - **Journal Database**: Your own thoughts or blurbs\n3. **Tagging Analysis**: For each idea, assign up to 3 relevant tags from the predefined list\n4. **Tag Reasoning**: Explain WHY each tag was selected\n5. **Tag Suggestions**: If relevant concepts aren't in predefined tags, suggest new ones\n6. **Database Reasoning**: Explain WHY each idea belongs in each specific database\n7. **Future Database Updates**: Prepare analysis for automated routing to Project/Knowledge Archive/Journal databases\n\n# OUTPUT REQUIREMENTS\n- Execute multi-idea parsing methodology on the single test idea\n- Provide DETAILED DATABASE ROUTING ANALYSIS with reasoning\n- For each idea detected, specify target database (Project, Knowledge Archive, or Journal)\n- Include specific reasoning for database routing decisions\n- Update status: In Progress when starting, Done when complete\n- Output structured analysis suitable for automated database routing\n\n# DATABASE ROUTING OUTPUT FORMAT\nFor each idea detected, provide:\n```\nIDEA #: [Brief description]\nTARGET_DATABASE_ID: [project-db-id-placeholder|knowledge-db-id-placeholder|journal-db-id-placeholder]\nDATABASE_TYPE: [Projects|Knowledge Archive|Journal]\nTAGS: [Tag1, Tag2, Tag3] (max 3 from predefined list)\nTAG_REASONING: [Why each tag was selected]\nDATABASE_REASONING: [Detailed explanation for database choice]\nCONTENT: [Extracted content for this idea]\nPRIORITY: [High/Medium/Low]\nACTIONABLE: [Yes/No - for Project database routing]\nREFERENCE_VALUE: [High/Medium/Low - for Knowledge Archive routing]\nPERSONAL_INSIGHT: [Yes/No - for Journal database routing]\nTAG_SUGGESTIONS: [Any new tags not in predefined list]\nDATA_FOR_DB: [JSON structure ready for target database]\n```\n\n# MULTI-DATABASE INTEGRATION\n## Phase 1 Example Output:\n\"Director, I analyzed 3 ideas from the ideas database:\n- Idea 1: Routes to Projects DB (project-db-id-placeholder) - actionable implementation\n- Idea 2: Routes to Knowledge DB (knowledge-db-id-placeholder) - reference material  \n- Idea 3: Routes to Journal DB (journal-db-id-placeholder) - personal reflection\"\n\n## Phase 2 Example Tasks from Director:\n\"Notion Agent: Create page in project-db-id-placeholder with title 'Build Todo App' and status 'Not Started'\"\n\n**FOCUS: Multi-database workflow with specific database IDs for automated routing.**",
+          "systemMessage": "You are the Notion Agent executing Director instructions.\n\n# EXECUTION APPROACH\n1. Read the task objective and requirements carefully\n2. Use the provided methodology and rules to execute the task\n3. Apply all specified validation and processing rules\n4. Use the required MCP tools as instructed\n5. Return results in the specified JSON format\n\n# RESPONSE FORMAT\nReturn ONLY JSON in this exact structure:\n{\n  \"agent_id\": \"notion\",\n  \"task_id\": \"{{ $json.originalJSON.task_id || 'test_task' }}\",\n  \"phase\": \"{{ $json.taskType }}_complete\",\n  \"timestamp\": \"ISO_timestamp\",\n  \"execution_time_ms\": number,\n  \"results\": {\n    // Task-specific results based on task type\n    // For categorization: ideas_processed array with categorization analysis\n    // For database_updates: operations_completed array with success/failure status\n    // For content_processing: processed_content with transformations applied\n  },\n  \"status\": {\n    \"success\": boolean,\n    \"errors\": [],\n    \"next_phase\": \"string\"\n  },\n  \"context_updates\": {\n    \"api_calls\": number,\n    \"tools_used\": [],\n    \"performance_notes\": \"string\"\n  }\n}\n\n**CRITICAL: Output only valid JSON. No explanations or summaries. Focus solely on the task described in the instructions.**",
           "maxIterations": 10
         }
       },
@@ -363,7 +571,73 @@
         ]
       ]
     },
+    "Webhook Health Check": {
+      "main": [
+        [
+          {
+            "node": "Health Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Response": {
+      "main": [
+        [
+          {
+            "node": "Health Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Execute": {
+      "main": [
+        [
+          {
+            "node": "Parse Director Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Status": {
+      "main": [
+        [
+          {
+            "node": "Status Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status Response": {
+      "main": [
+        [
+          {
+            "node": "Status Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Setup Test Context": {
+      "main": [
+        [
+          {
+            "node": "Parse Director Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Director Instructions": {
       "main": [
         [
           {

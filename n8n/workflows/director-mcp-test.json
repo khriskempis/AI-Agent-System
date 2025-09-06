@@ -1,0 +1,316 @@
+{
+  "name": "Director MCP Server - Test Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "test-config",
+              "name": "testConfig",
+              "value": {
+                "director_mcp_server": "http://localhost:3002",
+                "notion_agent_server": "http://localhost:5678",
+                "workflow_type": "idea_categorization",
+                "test_parameters": {
+                  "source_database_id": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
+                  "projects_database_id": "3cd8ea052d6d4b69956e89b1184cae75",
+                  "knowledge_database_id": "263d7be3dbcd80c0b6e4fd309a8af453",
+                  "journal_database_id": "a1d35f6081a044589425512cb9d136b7",
+                  "limit": 1
+                }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "setup-test-config",
+      "name": "Setup Test Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.testConfig.director_mcp_server }}/health",
+        "options": {}
+      },
+      "id": "health-check",
+      "name": "1. Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.testConfig.director_mcp_server }}/api/mcp/get-workflow-template",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"workflow_type\": \"{{ $json.testConfig.workflow_type }}\",\n  \"cache_duration\": 3600\n}",
+        "options": {}
+      },
+      "id": "get-template",
+      "name": "2. Get Workflow Template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.testConfig.director_mcp_server }}/api/mcp/create-agent-instructions",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"workflow_type\": \"{{ $json.testConfig.workflow_type }}\",\n  \"target_agent\": \"notion\",\n  \"parameters\": {\n    \"source_database_id\": \"{{ $json.testConfig.test_parameters.source_database_id }}\",\n    \"projects_database_id\": \"{{ $json.testConfig.test_parameters.projects_database_id }}\",\n    \"knowledge_database_id\": \"{{ $json.testConfig.test_parameters.knowledge_database_id }}\",\n    \"journal_database_id\": \"{{ $json.testConfig.test_parameters.journal_database_id }}\",\n    \"limit\": {{ $json.testConfig.test_parameters.limit }}\n  }\n}",
+        "options": {}
+      },
+      "id": "create-instructions",
+      "name": "3. Create Agent Instructions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.testConfig.director_mcp_server }}/api/agents/health",
+        "options": {}
+      },
+      "id": "check-agents-health",
+      "name": "4. Check Agents Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 600]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.testConfig.director_mcp_server }}/api/mcp/execute-workflow",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"workflow_type\": \"{{ $json.testConfig.workflow_type }}\",\n  \"target_agent\": \"notion\",\n  \"parameters\": {\n    \"source_database_id\": \"{{ $json.testConfig.test_parameters.source_database_id }}\",\n    \"projects_database_id\": \"{{ $json.testConfig.test_parameters.projects_database_id }}\",\n    \"knowledge_database_id\": \"{{ $json.testConfig.test_parameters.knowledge_database_id }}\",\n    \"journal_database_id\": \"{{ $json.testConfig.test_parameters.journal_database_id }}\",\n    \"limit\": {{ $json.testConfig.test_parameters.limit }}\n  }\n}",
+        "options": {}
+      },
+      "id": "execute-workflow",
+      "name": "5. Execute Full Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze Director MCP Server Test Results\n\nconst healthCheck = $('1. Health Check').first().json;\nconst template = $('2. Get Workflow Template').first().json;\nconst instructions = $('3. Create Agent Instructions').first().json;\nconst agentsHealth = $('4. Check Agents Health').first().json;\nconst workflowExecution = $('5. Execute Full Workflow').first().json;\n\n// Analyze results\nconst results = {\n  timestamp: new Date().toISOString(),\n  test_summary: {\n    director_server_health: healthCheck?.status === 'healthy',\n    template_loading: template?.success === true,\n    instruction_creation: instructions?.success === true,\n    agents_health: agentsHealth?.success === true,\n    workflow_execution: workflowExecution?.success === true\n  },\n  detailed_results: {\n    health_check: {\n      status: healthCheck?.status,\n      services: healthCheck?.services\n    },\n    template: {\n      success: template?.success,\n      template_id: template?.data?.workflow_id,\n      version: template?.data?.version,\n      phases: template?.data?.phases?.length,\n      size_kb: template?.data ? Math.round(JSON.stringify(template.data).length / 1024) : 0\n    },\n    instructions: {\n      success: instructions?.success,\n      task_id: instructions?.data?.task_id,\n      agent_id: instructions?.data?.agent_id,\n      instruction_size_kb: instructions?.data ? Math.round(JSON.stringify(instructions.data).length / 1024) : 0,\n      has_methodology: !!instructions?.data?.categorization_methodology\n    },\n    agents_health: {\n      success: agentsHealth?.success,\n      healthy_agents: agentsHealth?.data?.summary?.healthy_agents,\n      total_agents: agentsHealth?.data?.summary?.total_agents,\n      health_percentage: agentsHealth?.data?.summary?.health_percentage\n    },\n    workflow_execution: {\n      success: workflowExecution?.success,\n      context_id: workflowExecution?.data?.context_id,\n      agent_response: workflowExecution?.data?.agent_response ? 'received' : 'none',\n      workflow_complete: workflowExecution?.data?.workflow_complete\n    }\n  },\n  performance_metrics: {\n    template_size_reduction: template?.data && instructions?.data ? \n      Math.round(((JSON.stringify(template.data).length - JSON.stringify(instructions.data).length) / JSON.stringify(template.data).length) * 100) : 0,\n    total_test_duration_ms: Date.now() - new Date($('Setup Test Config').first().json.testConfig?.start_time || Date.now()).getTime()\n  },\n  errors: {\n    health_check: healthCheck?.error,\n    template: template?.error,\n    instructions: instructions?.error,\n    agents_health: agentsHealth?.error,\n    workflow_execution: workflowExecution?.error\n  }\n};\n\n// Overall test status\nconst allTestsPassed = Object.values(results.test_summary).every(result => result === true);\n\nresults.overall_status = {\n  success: allTestsPassed,\n  message: allTestsPassed ? \n    '✅ All Director MCP Server tests passed successfully!' : \n    '❌ Some tests failed - check detailed results',\n  tests_passed: Object.values(results.test_summary).filter(Boolean).length,\n  total_tests: Object.keys(results.test_summary).length\n};\n\nreturn [results];"
+      },
+      "id": "analyze-results",
+      "name": "6. Analyze Test Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "leftValue": "={{ $json.overall_status.success }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "test-result-switch",
+      "name": "Test Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// SUCCESS: All tests passed\nconst results = $json;\n\nreturn [{\n  status: 'SUCCESS',\n  message: '🎉 Director MCP Server Test Suite PASSED',\n  summary: {\n    tests_passed: `${results.overall_status.tests_passed}/${results.overall_status.total_tests}`,\n    template_size_reduction: `${results.performance_metrics.template_size_reduction}%`,\n    director_health: results.test_summary.director_server_health ? '✅' : '❌',\n    template_loading: results.test_summary.template_loading ? '✅' : '❌',\n    instruction_creation: results.test_summary.instruction_creation ? '✅' : '❌',\n    agents_health: results.test_summary.agents_health ? '✅' : '❌',\n    workflow_execution: results.test_summary.workflow_execution ? '✅' : '❌'\n  },\n  key_metrics: {\n    template_size: `${results.detailed_results.template.size_kb}KB`,\n    instruction_size: `${results.detailed_results.instructions.instruction_size_kb}KB`,\n    size_reduction: `${results.performance_metrics.template_size_reduction}%`,\n    healthy_agents: `${results.detailed_results.agents_health.healthy_agents}/${results.detailed_results.agents_health.total_agents}`,\n    workflow_context: results.detailed_results.workflow_execution.context_id\n  },\n  next_steps: [\n    'Director MCP Server is working correctly',\n    'Template system is functional',\n    'Agent communication is established',\n    'Ready for production workflow execution',\n    'Consider testing additional workflow types'\n  ],\n  full_results: results\n}];"
+      },
+      "id": "success-output",
+      "name": "✅ All Tests Passed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// FAILURE: Some tests failed\nconst results = $json;\n\nconst failedTests = Object.entries(results.test_summary)\n  .filter(([test, passed]) => !passed)\n  .map(([test, passed]) => test);\n\nconst errors = Object.entries(results.errors)\n  .filter(([test, error]) => error)\n  .map(([test, error]) => ({ test, error }));\n\nreturn [{\n  status: 'FAILURE',\n  message: '❌ Director MCP Server Test Suite FAILED',\n  summary: {\n    tests_passed: `${results.overall_status.tests_passed}/${results.overall_status.total_tests}`,\n    failed_tests: failedTests,\n    director_health: results.test_summary.director_server_health ? '✅' : '❌',\n    template_loading: results.test_summary.template_loading ? '✅' : '❌',\n    instruction_creation: results.test_summary.instruction_creation ? '✅' : '❌',\n    agents_health: results.test_summary.agents_health ? '✅' : '❌',\n    workflow_execution: results.test_summary.workflow_execution ? '✅' : '❌'\n  },\n  errors: errors,\n  troubleshooting: [\n    'Check if Director MCP Server is running on port 3002',\n    'Verify template files exist in director-mcp/workflow-templates/',\n    'Check if Notion MCP Server is running on port 3001',\n    'Verify n8n server is running on port 5678',\n    'Check network connectivity between services',\n    'Review server logs for detailed error information'\n  ],\n  diagnostics: {\n    director_server: 'curl http://localhost:3002/health',\n    notion_server: 'curl http://localhost:3001/health',\n    n8n_server: 'curl http://localhost:5678',\n    template_directory: 'ls -la director-mcp/workflow-templates/'\n  },\n  full_results: results\n}];"
+      },
+      "id": "failure-output",
+      "name": "❌ Tests Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 600]
+    },
+    {
+      "parameters": {
+        "content": "# Director MCP Server Test Workflow\n\n## 🎯 Test Overview\nThis workflow tests the complete Director MCP Server functionality:\n\n### Test Sequence:\n1. **Health Check** - Verify Director MCP Server is running\n2. **Template Loading** - Test workflow template retrieval\n3. **Instruction Creation** - Test focused JSON generation\n4. **Agent Health** - Check agent availability \n5. **Workflow Execution** - Test end-to-end execution\n6. **Result Analysis** - Comprehensive test evaluation\n\n### Key Metrics Tested:\n- ✅ Template size reduction (15KB → 2.5KB)\n- ✅ Agent communication health\n- ✅ Context management\n- ✅ JSON instruction generation\n- ✅ Error handling\n\n### Expected Results:\n- Director Server: Healthy\n- Template Loading: Success\n- Instruction Creation: Success\n- Agent Health: Available\n- Workflow Execution: Complete\n\n**Run this workflow to validate Director MCP Server integration!**",
+        "height": 400,
+        "width": 500,
+        "color": 4
+      },
+      "id": "documentation-note",
+      "name": "Test Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, 600]
+    }
+  ],
+  "connections": {
+    "Manual Test Trigger": {
+      "main": [
+        [
+          {
+            "node": "Setup Test Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup Test Config": {
+      "main": [
+        [
+          {
+            "node": "1. Health Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "2. Get Workflow Template", 
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "3. Create Agent Instructions",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "4. Check Agents Health",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "5. Execute Full Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Health Check": {
+      "main": [
+        [
+          {
+            "node": "6. Analyze Test Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Get Workflow Template": {
+      "main": [
+        [
+          {
+            "node": "6. Analyze Test Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Create Agent Instructions": {
+      "main": [
+        [
+          {
+            "node": "6. Analyze Test Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Check Agents Health": {
+      "main": [
+        [
+          {
+            "node": "6. Analyze Test Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Execute Full Workflow": {
+      "main": [
+        [
+          {
+            "node": "6. Analyze Test Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Analyze Test Results": {
+      "main": [
+        [
+          {
+            "node": "Test Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Success?": {
+      "main": [
+        [
+          {
+            "node": "✅ All Tests Passed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "❌ Tests Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["director-mcp", "testing", "workflow-orchestration"],
+  "triggerCount": 0,
+  "updatedAt": "2025-09-03T20:00:00.000Z",
+  "versionId": "director-test-v1"
+}

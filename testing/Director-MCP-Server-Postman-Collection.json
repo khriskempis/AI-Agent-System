@@ -1,0 +1,416 @@
+{
+  "info": {
+    "name": "Director MCP Server Test Collection",
+    "description": "Comprehensive test collection for Director MCP Server - Template loading, instruction creation, agent communication, and workflow execution",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "director_server",
+      "value": "http://localhost:3002",
+      "type": "string"
+    },
+    {
+      "key": "notion_server", 
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "n8n_server",
+      "value": "http://localhost:5678",
+      "type": "string"
+    },
+    {
+      "key": "source_database_id",
+      "value": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
+      "type": "string"
+    },
+    {
+      "key": "projects_database_id",
+      "value": "3cd8ea052d6d4b69956e89b1184cae75",
+      "type": "string"
+    },
+    {
+      "key": "knowledge_database_id", 
+      "value": "263d7be3dbcd80c0b6e4fd309a8af453",
+      "type": "string"
+    },
+    {
+      "key": "journal_database_id",
+      "value": "a1d35f6081a044589425512cb9d136b7",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🏥 Health & Status",
+      "item": [
+        {
+          "name": "Director Server Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{director_server}}/health",
+              "host": ["{{director_server}}"],
+              "path": ["health"]
+            },
+            "description": "Check if Director MCP Server is healthy and running"
+          },
+          "response": []
+        },
+        {
+          "name": "System Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{director_server}}/api/stats",
+              "host": ["{{director_server}}"],
+              "path": ["api", "stats"]
+            },
+            "description": "Get comprehensive system statistics including performance metrics"
+          },
+          "response": []
+        },
+        {
+          "name": "Check All Agents Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{director_server}}/api/agents/health",
+              "host": ["{{director_server}}"],
+              "path": ["api", "agents", "health"]
+            },
+            "description": "Check health status of all configured agents (notion, planner, validation)"
+          },
+          "response": []
+        },
+        {
+          "name": "Check Notion Agent Health",
+          "request": {
+            "method": "GET", 
+            "header": [],
+            "url": {
+              "raw": "{{director_server}}/api/agents/notion/health",
+              "host": ["{{director_server}}"],
+              "path": ["api", "agents", "notion", "health"]
+            },
+            "description": "Check health status of the Notion Agent specifically"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🎯 MCP Tools (Core Director Functions)",
+      "item": [
+        {
+          "name": "Get Workflow Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflow_type\": \"idea_categorization\",\n  \"parameters\": {\n    \"limit\": 5\n  },\n  \"cache_duration\": 3600\n}"
+            },
+            "url": {
+              "raw": "{{director_server}}/api/mcp/get-workflow-template",
+              "host": ["{{director_server}}"],
+              "path": ["api", "mcp", "get-workflow-template"]
+            },
+            "description": "Load the complete workflow template (15KB) - Primary MCP tool for Director Agent"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Agent Instructions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflow_type\": \"idea_categorization\",\n  \"target_agent\": \"notion\",\n  \"parameters\": {\n    \"source_database_id\": \"{{source_database_id}}\",\n    \"projects_database_id\": \"{{projects_database_id}}\",\n    \"knowledge_database_id\": \"{{knowledge_database_id}}\",\n    \"journal_database_id\": \"{{journal_database_id}}\",\n    \"limit\": 1\n  }\n}"
+            },
+            "url": {
+              "raw": "{{director_server}}/api/mcp/create-agent-instructions",
+              "host": ["{{director_server}}"],
+              "path": ["api", "mcp", "create-agent-instructions"]
+            },
+            "description": "Extract essential logic from template and create focused 2.5KB JSON instructions for agent"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute Complete Workflow",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflow_type\": \"idea_categorization\",\n  \"target_agent\": \"notion\",\n  \"parameters\": {\n    \"source_database_id\": \"{{source_database_id}}\",\n    \"projects_database_id\": \"{{projects_database_id}}\",\n    \"knowledge_database_id\": \"{{knowledge_database_id}}\",\n    \"journal_database_id\": \"{{journal_database_id}}\",\n    \"limit\": 1\n  }\n}"
+            },
+            "url": {
+              "raw": "{{director_server}}/api/mcp/execute-workflow",
+              "host": ["{{director_server}}"],
+              "path": ["api", "mcp", "execute-workflow"]
+            },
+            "description": "Execute complete workflow: create context, generate instructions, send to agent, process response"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🤖 Agent Communication",
+      "item": [
+        {
+          "name": "Send Instructions to Notion Agent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Director-Task-ID",
+                "value": "test_task_001"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_id\": \"notion\",\n  \"task_id\": \"test_categorization_001\",\n  \"workflow_id\": \"idea_categorization_v1\",\n  \"phase\": \"categorization_analysis\",\n  \"timestamp\": \"{{$timestamp}}\",\n  \"instruction\": {\n    \"task_type\": \"multi_idea_categorization\",\n    \"objective\": \"Parse content for multiple distinct ideas and categorize each into appropriate target databases\",\n    \"source_database_id\": \"{{source_database_id}}\",\n    \"limit\": 1,\n    \"status_filter\": \"Not Started\"\n  },\n  \"categorization_methodology\": {\n    \"multi_idea_parsing_rules\": [\n      \"Paragraph Separation: Each paragraph may contain a distinct idea\",\n      \"Empty Block Delimiter: Extra empty blocks separate ideas\",\n      \"Link + Description Grouping: Text above links describes that link\",\n      \"Topic Shift Detection: Identify complete topic changes\"\n    ],\n    \"database_routing_criteria\": {\n      \"projects\": {\n        \"database_id\": \"{{projects_database_id}}\",\n        \"description\": \"Actionable tasks, implementations, things to build or execute\",\n        \"keywords\": [\"build\", \"create\", \"implement\", \"develop\"],\n        \"examples\": [\"Build Todo App\", \"Create automation script\"]\n      },\n      \"knowledge\": {\n        \"database_id\": \"{{knowledge_database_id}}\",\n        \"description\": \"Reference materials, articles, videos, educational content\",\n        \"keywords\": [\"article\", \"video\", \"tutorial\", \"guide\"],\n        \"examples\": [\"Interesting article about AI\", \"Tutorial video\"]\n      },\n      \"journal\": {\n        \"database_id\": \"{{journal_database_id}}\",\n        \"description\": \"Personal thoughts, reflections, observations\",\n        \"keywords\": [\"thought\", \"reflection\", \"personal\"],\n        \"examples\": [\"My thoughts on...\", \"Personal reflection\"]\n      }\n    },\n    \"tagging_rules\": {\n      \"max_tags\": 3,\n      \"available_tags\": [\"Priority\", \"Coding\", \"AI\", \"Educational\", \"Project\"]\n    }\n  },\n  \"execution_requirements\": {\n    \"required_tools\": [\"get_ideas\", \"get_idea_by_id\"],\n    \"timeout_seconds\": 180,\n    \"response_format\": \"categorization_results_json\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{director_server}}/api/agents/notion/execute",
+              "host": ["{{director_server}}"],
+              "path": ["api", "agents", "notion", "execute"]
+            },
+            "description": "Send structured JSON instructions directly to Notion Agent"
+          },
+          "response": []
+        },
+        {
+          "name": "Simulate Agent Response",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw", 
+              "raw": "{\n  \"agent_id\": \"notion\",\n  \"task_id\": \"test_categorization_001\",\n  \"phase\": \"categorization_complete\",\n  \"timestamp\": \"{{$timestamp}}\",\n  \"execution_time_ms\": 15000,\n  \"results\": {\n    \"ideas_processed\": [\n      {\n        \"idea_id\": \"test_idea_001\",\n        \"title\": \"Build AI Assistant\",\n        \"target_database\": \"projects\",\n        \"target_database_id\": \"{{projects_database_id}}\",\n        \"tags\": [\"Project\", \"AI\", \"Coding\"],\n        \"priority\": \"high\",\n        \"reasoning\": \"Actionable implementation task requiring development work\"\n      }\n    ],\n    \"summary\": {\n      \"total_processed\": 1,\n      \"projects\": 1,\n      \"knowledge\": 0,\n      \"journal\": 0\n    }\n  },\n  \"status\": {\n    \"success\": true,\n    \"errors\": [],\n    \"next_phase\": \"awaiting_execution_instructions\"\n  },\n  \"context_updates\": {\n    \"api_calls\": 2,\n    \"tools_used\": [\"get_ideas\", \"get_idea_by_id\"],\n    \"performance_notes\": \"Processing completed within timeout\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{director_server}}/api/agents/response?context_id=test_context_001",
+              "host": ["{{director_server}}"],
+              "path": ["api", "agents", "response"],
+              "query": [
+                {
+                  "key": "context_id",
+                  "value": "test_context_001"
+                }
+              ]
+            },
+            "description": "Simulate agent response to test context management"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📊 Context Management",
+      "item": [
+        {
+          "name": "List Active Contexts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{director_server}}/api/context",
+              "host": ["{{director_server}}"],
+              "path": ["api", "context"]
+            },
+            "description": "Get list of all active workflow contexts"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Workflow Context",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{director_server}}/api/context/test_context_001",
+              "host": ["{{director_server}}"],
+              "path": ["api", "context", "test_context_001"]
+            },
+            "description": "Get complete workflow context by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Agent-Specific Context",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{director_server}}/api/context/test_context_001/agent/notion",
+              "host": ["{{director_server}}"],
+              "path": ["api", "context", "test_context_001", "agent", "notion"]
+            },
+            "description": "Get context information specific to a particular agent"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🔧 Administration",
+      "item": [
+        {
+          "name": "Clear Template Cache",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{director_server}}/api/admin/clear-cache",
+              "host": ["{{director_server}}"],
+              "path": ["api", "admin", "clear-cache"]
+            },
+            "description": "Clear template cache to force reload from files"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧪 Integration Tests",
+      "item": [
+        {
+          "name": "Full Integration Test Sequence",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"test_sequence\": \"full_integration\",\n  \"workflow_type\": \"idea_categorization\",\n  \"target_agent\": \"notion\",\n  \"parameters\": {\n    \"source_database_id\": \"{{source_database_id}}\",\n    \"projects_database_id\": \"{{projects_database_id}}\",\n    \"knowledge_database_id\": \"{{knowledge_database_id}}\",\n    \"journal_database_id\": \"{{journal_database_id}}\",\n    \"limit\": 1\n  },\n  \"expected_results\": {\n    \"template_loading\": true,\n    \"instruction_creation\": true,\n    \"agent_communication\": true,\n    \"context_management\": true,\n    \"workflow_completion\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{director_server}}/api/mcp/execute-workflow",
+              "host": ["{{director_server}}"],
+              "path": ["api", "mcp", "execute-workflow"]
+            },
+            "description": "Complete integration test that validates the entire Director → Agent → Context flow"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🔍 Debug & Troubleshooting",
+      "item": [
+        {
+          "name": "Notion MCP Server Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notion_server}}/health",
+              "host": ["{{notion_server}}"],
+              "path": ["health"]
+            },
+            "description": "Check if Notion MCP Server (port 3001) is healthy"
+          },
+          "response": []
+        },
+        {
+          "name": "n8n Server Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{n8n_server}}/healthz",
+              "host": ["{{n8n_server}}"],
+              "path": ["healthz"]
+            },
+            "description": "Check if n8n server (port 5678) is healthy"
+          },
+          "response": []
+        },
+        {
+          "name": "Test Template File Access",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type", 
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflow_type\": \"nonexistent_template\",\n  \"cache_duration\": 0\n}"
+            },
+            "url": {
+              "raw": "{{director_server}}/api/mcp/get-workflow-template",
+              "host": ["{{director_server}}"],
+              "path": ["api", "mcp", "get-workflow-template"]
+            },
+            "description": "Test error handling for non-existent templates"
+          },
+          "response": []
+        },
+        {
+          "name": "Test Agent Communication Failure",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_id\": \"nonexistent_agent\",\n  \"task_id\": \"test_failure_001\",\n  \"instruction\": {\n    \"task_type\": \"test_task\",\n    \"objective\": \"Test error handling\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{director_server}}/api/agents/nonexistent_agent/execute",
+              "host": ["{{director_server}}"],
+              "path": ["api", "agents", "nonexistent_agent", "execute"]
+            },
+            "description": "Test error handling for unknown agents"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

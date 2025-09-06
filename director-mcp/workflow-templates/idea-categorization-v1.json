@@ -1,0 +1,194 @@
+{
+  "workflow_id": "idea_categorization_v1",
+  "workflow_name": "Multi-Idea Categorization and Database Routing",
+  "workflow_type": "idea_processing",
+  "version": "1.0.0",
+  "created_date": "2025-09-03",
+  "description": "Analyze ideas from source database, parse multiple ideas per post, categorize each into appropriate target databases",
+  
+  "phases": [
+    {
+      "phase_id": "categorization_analysis",
+      "phase_name": "Idea Analysis and Categorization",
+      "sequence": 1,
+      "agent": "notion",
+      "timeout_seconds": 180,
+      "retry_attempts": 2,
+      
+      "agent_instructions": {
+        "task_type": "multi_idea_categorization",
+        "behavior": "Parse content for multiple distinct ideas and categorize each into appropriate databases",
+        "prompt_reference": "notion_agent_categorization_prompt_v1",
+        "full_prompt": "You are the Notion Agent executing a categorization task.\n\n# TASK EXECUTION\nAnalyze ideas from the source database and categorize each distinct idea found.\n\n# MULTI-IDEA PARSING RULES\n1. **Paragraph Separation**: Each paragraph may contain a distinct idea\n2. **Empty Block Delimiter**: Extra empty blocks separate ideas\n3. **Link + Description Grouping**: Text above links describes that link\n4. **Topic Shift Detection**: Identify complete topic changes\n5. **Context Preservation**: Maintain original meaning and intent\n\n# CATEGORIZATION SCHEMA\n- **Projects Database**: Actionable tasks, implementations, things to build or execute\n- **Knowledge Archive Database**: Reference materials, articles, videos, educational content\n- **Journal Database**: Personal thoughts, reflections, observations, insights\n\n# TAGGING RULES\n- **Maximum 3 tags** per idea from predefined list\n- **Available Tags**: Priority, Notion Template, Brand, Content Creator, Music, Funny, Coding, App, Educational, Gaming, AI, Monetize, Social Media, Thought, Niche, Project Hub, Automation, Project, Database\n- **Tag Priority**: Most relevant first\n\n# EXECUTION REQUIREMENTS\n1. Get ideas from source database (limit based on instruction)\n2. Parse each idea for multiple distinct concepts\n3. Categorize each parsed idea into target database\n4. Apply intelligent tagging (max 3 per idea)\n5. Return structured JSON analysis\n\n# OUTPUT REQUIREMENTS\nReturn ONLY JSON in the specified schema. No summaries, explanations, or narrative text.\n\n**CRITICAL: Output only valid JSON matching the expected schema.**",
+        
+        "required_tools": [
+          "get_ideas",
+          "get_idea_by_id", 
+          "get_database_schema"
+        ],
+        
+        "parameters": {
+          "source_database_id": "{{workflow.context.database_ids.ideas}}",
+          "limit": "{{workflow.parameters.idea_limit || 5}}",
+          "status_filter": "Not Started",
+          "categorization_rules": {
+            "projects": {
+              "keywords": ["build", "create", "implement", "develop", "task", "action"],
+              "criteria": "actionable_items"
+            },
+            "knowledge": {
+              "keywords": ["article", "video", "reference", "learn", "tutorial", "guide"],
+              "criteria": "reference_materials"
+            },
+            "journal": {
+              "keywords": ["thought", "reflection", "personal", "opinion", "insight"],
+              "criteria": "personal_insights"
+            }
+          },
+          "tagging_config": {
+            "max_tags": 3,
+            "predefined_only": true,
+            "tag_list": ["Priority", "Notion Template", "Brand", "Content Creator", "Music", "Funny", "Coding", "App", "Educational", "Gaming", "AI", "Monetize", "Social Media", "Thought", "Niche", "Project Hub", "Automation", "Project", "Database"]
+          }
+        },
+        
+        "expected_output_format": "categorization_analysis_json",
+        "context_logging": {
+          "log_level": "detailed",
+          "include_api_responses": true,
+          "track_performance": true
+        }
+      },
+      
+      "expected_output_schema": {
+        "type": "object",
+        "required": ["agent", "phase", "timestamp", "ideas_analyzed", "summary", "next_phase"],
+        "properties": {
+          "agent": {"type": "string", "enum": ["notion"]},
+          "phase": {"type": "string", "enum": ["categorization_complete"]},
+          "timestamp": {"type": "string", "format": "date-time"},
+          "workflow_id": {"type": "string"},
+          "ideas_analyzed": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["idea_id", "title", "target_database", "target_database_id", "reasoning"],
+              "properties": {
+                "idea_id": {"type": "string"},
+                "title": {"type": "string"},
+                "content": {"type": "string"},
+                "target_database": {"type": "string", "enum": ["projects", "knowledge", "journal"]},
+                "target_database_id": {"type": "string"},
+                "tags": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
+                "reasoning": {"type": "string"},
+                "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+                "actionable": {"type": "boolean"},
+                "reference_value": {"type": "string", "enum": ["high", "medium", "low"]},
+                "personal_insight": {"type": "boolean"},
+                "metadata": {
+                  "type": "object",
+                  "properties": {
+                    "word_count": {"type": "number"},
+                    "has_links": {"type": "boolean"},
+                    "complexity_score": {"type": "number"}
+                  }
+                }
+              }
+            }
+          },
+          "summary": {
+            "type": "object",
+            "required": ["total_ideas", "projects_count", "knowledge_count", "journal_count"],
+            "properties": {
+              "total_ideas": {"type": "number"},
+              "projects_count": {"type": "number"},
+              "knowledge_count": {"type": "number"},
+              "journal_count": {"type": "number"},
+              "processing_time_ms": {"type": "number"},
+              "errors": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          "next_phase": {"type": "string", "enum": ["awaiting_director_tasks"]},
+          "context_updates": {
+            "type": "object",
+            "properties": {
+              "api_calls_made": {"type": "array"},
+              "performance_metrics": {"type": "object"},
+              "debug_info": {"type": "object"}
+            }
+          }
+        }
+      },
+      
+      "error_handling": {
+        "timeout_action": "return_partial_results",
+        "api_error_action": "log_and_propagate",
+        "validation_error_action": "request_clarification",
+        "required_error_fields": ["error_type", "error_message", "context", "suggested_action"]
+      },
+      
+      "success_criteria": {
+        "minimum_ideas_processed": 1,
+        "required_fields_present": ["ideas_analyzed", "summary"],
+        "valid_json_structure": true,
+        "all_ideas_categorized": true
+      }
+    }
+  ],
+  
+  "workflow_context": {
+    "required_database_ids": {
+      "ideas": "source database for unprocessed ideas",
+      "projects": "target database for actionable items",
+      "knowledge": "target database for reference materials", 
+      "journal": "target database for personal insights"
+    },
+    "shared_data_structure": {
+      "categorization_results": "array of categorized ideas",
+      "performance_metrics": "timing and success rates",
+      "error_log": "any issues encountered",
+      "api_call_log": "detailed API interaction log"
+    },
+    "context_preservation": {
+      "maintain_across_phases": true,
+      "log_all_operations": true,
+      "include_debug_info": true
+    }
+  },
+  
+  "debugging_properties": {
+    "log_level": "verbose",
+    "capture_api_responses": true,
+    "track_token_usage": true,
+    "performance_monitoring": true,
+    "error_stack_traces": true,
+    "validation_checkpoints": [
+      "input_validation",
+      "tool_execution", 
+      "output_formatting",
+      "schema_validation"
+    ]
+  },
+  
+  "mcp_tool_compatibility": {
+    "tool_endpoint": "/api/workflows/templates/idea_categorization",
+    "required_parameters": ["database_ids"],
+    "optional_parameters": ["idea_limit", "priority_filter"],
+    "return_format": "json",
+    "cache_duration": 3600
+  },
+  
+  "validation_schema": {
+    "input_validation": {
+      "required_database_ids": 4,
+      "agent_availability": ["notion"],
+      "tool_accessibility": ["get_ideas", "get_idea_by_id", "get_database_schema"]
+    },
+    "output_validation": {
+      "json_structure": "strict",
+      "required_fields": "all",
+      "data_types": "enforce",
+      "enum_values": "validate"
+    }
+  }
+}

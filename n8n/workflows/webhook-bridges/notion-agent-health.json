@@ -1,0 +1,108 @@
+{
+  "name": "Notion Agent Health Check Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "notion-agent-health",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Health Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "health-response",
+              "name": "response",
+              "value": {
+                "agent_id": "notion",
+                "status": "healthy",
+                "timestamp": "={{ new Date().toISOString() }}",
+                "services": {
+                  "mcp_tools": "active",
+                  "notion_api": "active", 
+                  "database_access": "active"
+                },
+                "capabilities": [
+                  "get_ideas",
+                  "search_ideas", 
+                  "update_idea",
+                  "multi_idea_parsing",
+                  "categorization"
+                ],
+                "last_activity": "={{ new Date().toISOString() }}",
+                "version": "1.0.0"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "health-response",
+      "name": "Health Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.response) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",  
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Health Check": {
+      "main": [
+        [
+          {
+            "node": "Health Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Response": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main", 
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["webhook-bridge", "notion-agent", "health"],
+  "triggerCount": 0,
+  "updatedAt": "2025-09-06T01:10:00.000Z",
+  "versionId": "webhook-bridge-v1"
+}

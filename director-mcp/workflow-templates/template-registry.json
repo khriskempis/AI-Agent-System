@@ -1,0 +1,47 @@
+{
+  "registry_version": "1.0.0",
+  "last_updated": "2025-09-03",
+  "description": "Registry of all available workflow templates for the Director MCP server",
+  
+  "templates": {
+    "idea_categorization": {
+      "template_id": "idea_categorization_v1",
+      "file_path": "./idea-categorization-v1.json",
+      "workflow_type": "idea_processing",
+      "version": "1.0.0",
+      "status": "active",
+      "description": "Multi-idea parsing and database routing workflow",
+      "supported_agents": ["notion"],
+      "required_databases": ["ideas", "projects", "knowledge", "journal"],
+      "mcp_endpoint": "/api/workflows/templates/idea_categorization",
+      "created_date": "2025-09-03",
+      "tags": ["categorization", "multi-idea", "database-routing", "notion"]
+    }
+  },
+  
+  "template_categories": {
+    "idea_processing": {
+      "description": "Workflows for processing and categorizing ideas",
+      "templates": ["idea_categorization"]
+    },
+    "project_management": {
+      "description": "Workflows for managing projects and tasks",
+      "templates": []
+    },
+    "content_creation": {
+      "description": "Workflows for creating and managing content",
+      "templates": []
+    },
+    "data_analysis": {
+      "description": "Workflows for analyzing and reporting on data",
+      "templates": []
+    }
+  },
+  
+  "mcp_integration": {
+    "base_endpoint": "/api/workflows/templates",
+    "get_template_endpoint": "/api/workflows/templates/{template_id}",
+    "list_templates_endpoint": "/api/workflows/templates",
+    "template_validation_endpoint": "/api/workflows/templates/{template_id}/validate"
+  }
+}

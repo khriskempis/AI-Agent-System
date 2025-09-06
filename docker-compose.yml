@@ -225,6 +225,109 @@ services:
       retries: 3
       start_period: 30s
 
+  # Director MCP Server - Orchestrates multi-agent workflows
+  director-mcp-server:
+    build:
+      context: ./director-mcp-server
+      dockerfile: Dockerfile
+      target: production
+    container_name: mcp-director-server
+    restart: unless-stopped
+    
+    environment:
+      - NODE_ENV=production
+      - SERVER_NAME=director-mcp-server
+      - SERVER_VERSION=1.0.0
+      - PORT=3002
+    
+    # Expose HTTP port for MCP tools
+    ports:
+      - "3002:3002"
+    
+    # Mount template and schema files
+    volumes:
+      - ./director-mcp:/app/director-mcp:ro
+      - ./docs:/app/docs:ro
+      - director_logs:/app/logs
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.2'
+    
+    # Networks
+    networks:
+      - mcp-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    
+    # Labels for service discovery
+    labels:
+      - "mcp.server=director-mcp-server"
+      - "mcp.type=director"
+      - "mcp.mode=http"
+      - "mcp.version=1.0.0"
+      - "service=workflow-orchestration"
+    
+    # Dependencies
+    depends_on:
+      - notion-idea-server-http
+
+  # Director MCP Server - Development Mode
+  director-mcp-server-dev:
+    build:
+      context: ./director-mcp-server
+      dockerfile: Dockerfile
+      target: builder
+    container_name: mcp-director-server-dev
+    restart: unless-stopped
+    
+    environment:
+      - NODE_ENV=development
+      - SERVER_NAME=director-mcp-server-dev
+      - PORT=3002
+    
+    ports:
+      - "3002:3002"
+    
+    # Mount source for development
+    volumes:
+      - ./director-mcp-server/src:/app/src:ro
+      - ./director-mcp-server/package.json:/app/package.json:ro
+      - ./director-mcp-server/tsconfig.json:/app/tsconfig.json:ro
+      - ./director-mcp:/app/director-mcp:ro
+      - ./docs:/app/docs:ro
+      - director_logs_dev:/app/logs
+    
+    # Override command for development
+    command: ["npm", "run", "dev"]
+    
+    networks:
+      - mcp-network
+    
+    labels:
+      - "mcp.server=director-mcp-server-dev"
+      - "mcp.type=director"
+      - "mcp.mode=http"
+      - "mcp.environment=development"
+    
+    depends_on:
+      - notion-idea-server-http-dev
+    
+    profiles:
+      - dev
+
   # Template for future MCP servers
   # Copy and modify this template when adding new servers
   # 
@@ -260,4 +363,8 @@ volumes:
   mcp-shared-data:
     driver: local
   n8n_data:
+    driver: local
+  director_logs:
+    driver: local
+  director_logs_dev:
     driver: local 
