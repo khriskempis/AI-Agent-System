@@ -43,6 +43,7 @@ fi
 echo -e "${BLUE}📋 Project Services Overview:${NC}"
 echo "   🔹 Main MCP Server (stdio) → For direct MCP clients"
 echo "   🔹 Notion MCP Server (HTTP API) → Port 3001"  
+echo "   🔹 Director MCP Server (HTTP API) → Port 3002"
 echo "   🔹 n8n AI Workflow Platform → Port 5678"
 echo "   🔹 All services connected via mcp-network"
 echo
@@ -53,7 +54,7 @@ docker-compose down --remove-orphans
 
 # Build services (in case of code changes)
 echo -e "${BLUE}🔨 Building services...${NC}"
-docker-compose build notion-idea-server notion-idea-server-http
+docker-compose build notion-idea-server notion-idea-server-http director-mcp-server
 
 # Start core services for AI agents
 echo -e "${GREEN}🚀 Starting all MCP services...${NC}"
@@ -65,6 +66,10 @@ docker-compose up -d notion-idea-server
 # Start MCP HTTP API server (required for n8n agents)
 echo -e "${BLUE}   Starting Notion MCP HTTP API Server...${NC}"
 docker-compose up -d notion-idea-server-http
+
+# Start Director MCP Server (orchestrates multi-agent workflows)
+echo -e "${BLUE}   Starting Director MCP Server...${NC}"
+docker-compose up -d director-mcp-server
 
 # Start n8n workflow platform
 echo -e "${BLUE}   Starting n8n AI Workflow Platform...${NC}"
@@ -84,6 +89,13 @@ else
     echo -e "${RED}❌ MCP HTTP API Server: not responding${NC}"
 fi
 
+# Check Director MCP Server
+if curl -s http://localhost:3002/health >/dev/null 2>&1; then
+    echo -e "${GREEN}✅ Director MCP Server: healthy (port 3002)${NC}"
+else
+    echo -e "${YELLOW}⏳ Director MCP Server: still starting up...${NC}"
+fi
+
 # Check n8n
 if curl -s http://localhost:5678 >/dev/null 2>&1; then
     echo -e "${GREEN}✅ n8n Platform: healthy (port 5678)${NC}"
@@ -96,19 +108,29 @@ echo
 echo -e "${GREEN}🎉 MCP Server + AI Agents Project Started!${NC}"
 echo "=================================================================="
 echo -e "${BLUE}🔗 Access URLs:${NC}"
-echo "   📊 n8n AI Platform:    http://localhost:5678"
-echo "   🔌 MCP HTTP API:       http://localhost:3001"
-echo "   📋 API Health Check:   http://localhost:3001/health"
-echo "   💡 Ideas Summary:      http://localhost:3001/api/ideas/summary"
+echo "   📊 n8n AI Platform:     http://localhost:5678"
+echo "   🔌 Notion MCP API:      http://localhost:3001"
+echo "   🎯 Director MCP API:    http://localhost:3002"
+echo "   📋 Health Checks:"
+echo "      Notion Health:       http://localhost:3001/health"
+echo "      Director Health:     http://localhost:3002/health"
+echo "      System Stats:        http://localhost:3002/api/stats"
+echo "   💡 Quick Tests:"
+echo "      Ideas Summary:       http://localhost:3001/api/ideas/summary"
+echo "      Template Loading:    http://localhost:3002/api/mcp/get-workflow-template"
 echo
 echo -e "${BLUE}📱 Docker Desktop:${NC}"
 echo "   All containers visible in Docker Desktop"
-echo "   Container names: mcp-notion-idea-server, mcp-notion-idea-server-http, n8n-server"
+echo "   Container names: mcp-notion-idea-server, mcp-notion-idea-server-http, mcp-director-server, n8n-server"
 echo
 echo -e "${BLUE}📚 Next Steps:${NC}"
 echo "   1. Visit http://localhost:5678 to access n8n"
 echo "   2. Import workflows from: ./n8n/workflows/"
-echo "   3. Configure n8n agents to use: http://host.docker.internal:3001"
+echo "   3. Configure n8n agents to use:"
+echo "      - Notion MCP API: http://host.docker.internal:3001"
+echo "      - Director MCP API: http://host.docker.internal:3002"
+echo "   4. Test Director MCP Server: ./testing/test-director-endpoints.sh"
+echo "   5. Import Director test workflow: ./n8n/workflows/director-mcp-test.json"
 echo
 echo -e "${YELLOW}🔧 Development Mode:${NC}"
 echo "   To start development with hot reload:"

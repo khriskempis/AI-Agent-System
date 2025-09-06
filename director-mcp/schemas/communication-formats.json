@@ -1,0 +1,301 @@
+{
+  "communication_version": "1.0.0",
+  "description": "Standard communication formats between Director Agent and individual agents",
+  
+  "director_to_agent_instruction": {
+    "description": "JSON format sent from Director to any agent",
+    "schema": {
+      "type": "object",
+      "required": ["agent_id", "task_id", "instruction"],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "enum": ["notion", "planner", "validation"],
+          "description": "Target agent identifier"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Unique task identifier for tracking"
+        },
+        "workflow_id": {
+          "type": "string", 
+          "description": "Reference to workflow template used"
+        },
+        "phase": {
+          "type": "string",
+          "description": "Current workflow phase"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "instruction": {
+          "type": "object",
+          "required": ["task_type", "objective"],
+          "properties": {
+            "task_type": {
+              "type": "string",
+              "examples": ["multi_idea_categorization", "database_page_updates", "content_processing"]
+            },
+            "objective": {
+              "type": "string",
+              "description": "Clear description of what the agent should accomplish"
+            }
+          }
+        },
+        "categorization_methodology": {
+          "type": "object",
+          "description": "For categorization tasks",
+          "properties": {
+            "multi_idea_parsing_rules": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "database_routing_criteria": {
+              "type": "object",
+              "patternProperties": {
+                "^[a-z_]+$": {
+                  "type": "object",
+                  "properties": {
+                    "database_id": {"type": "string"},
+                    "description": {"type": "string"},
+                    "keywords": {"type": "array", "items": {"type": "string"}},
+                    "examples": {"type": "array", "items": {"type": "string"}}
+                  }
+                }
+              }
+            },
+            "tagging_rules": {
+              "type": "object",
+              "properties": {
+                "max_tags": {"type": "number"},
+                "available_tags": {"type": "array", "items": {"type": "string"}}
+              }
+            }
+          }
+        },
+        "database_execution": {
+          "type": "object",
+          "description": "For database update tasks",
+          "properties": {
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "action": {"type": "string", "enum": ["create_page", "update_page", "delete_page"]},
+                  "target_database_id": {"type": "string"},
+                  "page_id": {"type": "string"},
+                  "properties": {"type": "object"}
+                }
+              }
+            }
+          }
+        },
+        "execution_requirements": {
+          "type": "object",
+          "properties": {
+            "required_tools": {"type": "array", "items": {"type": "string"}},
+            "timeout_seconds": {"type": "number"},
+            "response_format": {"type": "string"}
+          }
+        }
+      }
+    },
+    
+    "examples": {
+      "categorization_task": {
+        "agent_id": "notion",
+        "task_id": "cat_001_20250903",
+        "workflow_id": "idea_categorization_v1",
+        "phase": "categorization_analysis",
+        "timestamp": "2025-09-03T18:30:00.000Z",
+        "instruction": {
+          "task_type": "multi_idea_categorization",
+          "objective": "Parse content for multiple distinct ideas and categorize each into appropriate target databases",
+          "source_database_id": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
+          "limit": 5,
+          "status_filter": "Not Started"
+        },
+        "categorization_methodology": {
+          "multi_idea_parsing_rules": [
+            "Paragraph Separation: Each paragraph may contain a distinct idea",
+            "Empty Block Delimiter: Extra empty blocks separate ideas"
+          ],
+          "database_routing_criteria": {
+            "projects": {
+              "database_id": "3cd8ea052d6d4b69956e89b1184cae75",
+              "description": "Actionable tasks, implementations, things to build or execute",
+              "keywords": ["build", "create", "implement"],
+              "examples": ["Build Todo App", "Create script"]
+            }
+          },
+          "tagging_rules": {
+            "max_tags": 3,
+            "available_tags": ["Priority", "Coding", "AI"]
+          }
+        },
+        "execution_requirements": {
+          "required_tools": ["get_ideas", "get_idea_by_id"],
+          "timeout_seconds": 180,
+          "response_format": "categorization_results_json"
+        }
+      },
+      
+      "database_update_task": {
+        "agent_id": "notion",
+        "task_id": "upd_001_20250903",
+        "workflow_id": "idea_categorization_v1",
+        "phase": "database_execution",
+        "timestamp": "2025-09-03T18:35:00.000Z",
+        "instruction": {
+          "task_type": "database_page_updates",
+          "objective": "Execute database page creation and updates based on categorization results"
+        },
+        "database_execution": {
+          "operations": [
+            {
+              "action": "create_page",
+              "target_database_id": "3cd8ea052d6d4b69956e89b1184cae75",
+              "page_id": "new",
+              "properties": {
+                "Name": "Build Todo App",
+                "Status": "Not Started",
+                "Priority": "High"
+              }
+            }
+          ]
+        },
+        "execution_requirements": {
+          "required_tools": ["update_database_page"],
+          "timeout_seconds": 120,
+          "response_format": "execution_results_json"
+        }
+      }
+    }
+  },
+  
+  "agent_to_director_response": {
+    "description": "JSON format returned from any agent to Director",
+    "schema": {
+      "type": "object",
+      "required": ["agent_id", "task_id", "phase", "timestamp", "results", "status"],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "description": "Agent that executed the task"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Task identifier from original instruction"
+        },
+        "phase": {
+          "type": "string",
+          "description": "Completion phase (e.g., 'categorization_complete')"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "execution_time_ms": {
+          "type": "number",
+          "description": "Time taken to execute task"
+        },
+        "results": {
+          "type": "object",
+          "description": "Task-specific results"
+        },
+        "status": {
+          "type": "object",
+          "required": ["success"],
+          "properties": {
+            "success": {"type": "boolean"},
+            "errors": {"type": "array", "items": {"type": "string"}},
+            "next_phase": {"type": "string"}
+          }
+        },
+        "context_updates": {
+          "type": "object",
+          "properties": {
+            "api_calls": {"type": "number"},
+            "tools_used": {"type": "array", "items": {"type": "string"}},
+            "performance_notes": {"type": "string"}
+          }
+        }
+      }
+    },
+    
+    "examples": {
+      "categorization_results": {
+        "agent_id": "notion",
+        "task_id": "cat_001_20250903",
+        "phase": "categorization_complete",
+        "timestamp": "2025-09-03T18:32:15.000Z",
+        "execution_time_ms": 45000,
+        "results": {
+          "ideas_processed": [
+            {
+              "idea_id": "abc123",
+              "title": "Build Todo App",
+              "target_database": "projects",
+              "target_database_id": "3cd8ea052d6d4b69956e89b1184cae75",
+              "tags": ["Project", "Coding", "AI"],
+              "priority": "high",
+              "reasoning": "Actionable implementation task"
+            }
+          ],
+          "summary": {
+            "total_processed": 3,
+            "projects": 1,
+            "knowledge": 1,
+            "journal": 1
+          }
+        },
+        "status": {
+          "success": true,
+          "errors": [],
+          "next_phase": "awaiting_execution_instructions"
+        },
+        "context_updates": {
+          "api_calls": 3,
+          "tools_used": ["get_ideas", "get_idea_by_id"],
+          "performance_notes": "Processing completed within timeout"
+        }
+      },
+      
+      "execution_results": {
+        "agent_id": "notion",
+        "task_id": "upd_001_20250903",
+        "phase": "execution_complete",
+        "timestamp": "2025-09-03T18:37:30.000Z",
+        "execution_time_ms": 15000,
+        "results": {
+          "operations_completed": [
+            {
+              "operation_id": "op_001",
+              "action": "create_page",
+              "target_database_id": "3cd8ea052d6d4b69956e89b1184cae75",
+              "created_page_id": "new_page_xyz789",
+              "status": "success"
+            }
+          ],
+          "summary": {
+            "total_operations": 1,
+            "successful": 1,
+            "failed": 0
+          }
+        },
+        "status": {
+          "success": true,
+          "errors": [],
+          "next_phase": "workflow_complete"
+        },
+        "context_updates": {
+          "api_calls": 1,
+          "tools_used": ["update_database_page"],
+          "performance_notes": "All pages created successfully"
+        }
+      }
+    }
+  }
+}

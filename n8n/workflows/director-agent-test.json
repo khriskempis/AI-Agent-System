@@ -1,0 +1,307 @@
+{
+  "name": "Director MCP Server - Test Integration",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "director-test",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Director Instructions Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "director-test-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log incoming Director instructions for debugging\nconst directorInstructions = $json.body || $json;\n\nconsole.log('=== DIRECTOR INSTRUCTIONS RECEIVED ===');\nconsole.log('Agent ID:', directorInstructions.agent_id);\nconsole.log('Task ID:', directorInstructions.task_id);\nconsole.log('Task Type:', directorInstructions.instruction?.task_type);\nconsole.log('Instruction Size:', JSON.stringify(directorInstructions).length, 'bytes');\nconsole.log('Full Instructions:', JSON.stringify(directorInstructions, null, 2));\n\n// Validate required fields\nconst validation = {\n  hasAgentId: !!directorInstructions.agent_id,\n  hasTaskId: !!directorInstructions.task_id,\n  hasInstruction: !!directorInstructions.instruction,\n  hasTaskType: !!directorInstructions.instruction?.task_type,\n  hasObjective: !!directorInstructions.instruction?.objective\n};\n\nconst isValid = Object.values(validation).every(v => v);\n\nconsole.log('Validation Results:', validation);\nconsole.log('Instructions Valid:', isValid);\n\nif (!isValid) {\n  throw new Error('Invalid Director instructions received: ' + JSON.stringify(validation));\n}\n\nreturn [{\n  directorInstructions,\n  validation,\n  isValid,\n  timestamp: new Date().toISOString()\n}];"
+      },
+      "id": "log-instructions",
+      "name": "Log Director Instructions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced Generic Director Instructions Parser\n// Converts JSON instructions from Director into readable text for LLM\n\nconst directorInstructions = $json.directorInstructions;\n\n// Extract task type and format dynamically\nconst taskType = directorInstructions.instruction?.task_type || 'unknown_task';\nconst taskTitle = taskType.replace(/_/g, ' ').toUpperCase();\n\nconsole.log('=== PARSING DIRECTOR INSTRUCTIONS ===');\nconsole.log('Task Type:', taskType);\nconsole.log('Task Title:', taskTitle);\n\n// Generic instruction builder\nfunction buildInstructionText(instructions) {\n  let text = `DIRECTOR TASK: ${taskTitle}\\n\\n`;\n  \n  // Core instruction section (always present)\n  if (instructions.instruction?.objective) {\n    text += `OBJECTIVE: ${instructions.instruction.objective}\\n\\n`;\n  }\n  \n  // Task-specific parameters\n  if (instructions.instruction) {\n    text += `TASK PARAMETERS:\\n`;\n    Object.entries(instructions.instruction).forEach(([key, value]) => {\n      if (key !== 'task_type' && key !== 'objective') {\n        text += `• ${key}: ${value}\\n`;\n      }\n    });\n    text += `\\n`;\n  }\n  \n  // Dynamic sections based on what's present in JSON\n  if (instructions.instruction?.source_database_id) {\n    text += `SOURCE DATABASE:\\n`;\n    text += `• Database ID: ${instructions.instruction.source_database_id}\\n`;\n    if (instructions.instruction.limit) text += `• Limit: ${instructions.instruction.limit}\\n`;\n    if (instructions.instruction.status_filter) text += `• Status Filter: ${instructions.instruction.status_filter}\\n`;\n    text += `\\n`;\n  }\n  \n  // Categorization methodology (for categorization tasks)\n  if (instructions.categorization_methodology) {\n    text += buildCategorizationSection(instructions.categorization_methodology);\n  }\n  \n  // Database execution instructions (for update tasks)\n  if (instructions.database_execution) {\n    text += buildDatabaseExecutionSection(instructions.database_execution);\n  }\n  \n  // Content processing rules (for content tasks)\n  if (instructions.content_processing) {\n    text += buildContentProcessingSection(instructions.content_processing);\n  }\n  \n  // Execution requirements (always present)\n  if (instructions.execution_requirements) {\n    text += `EXECUTION REQUIREMENTS:\\n`;\n    if (instructions.execution_requirements.required_tools) {\n      text += `• Required Tools: ${instructions.execution_requirements.required_tools.join(', ')}\\n`;\n    }\n    if (instructions.execution_requirements.timeout_seconds) {\n      text += `• Timeout: ${instructions.execution_requirements.timeout_seconds} seconds\\n`;\n    }\n    if (instructions.execution_requirements.response_format) {\n      text += `• Response Format: ${instructions.execution_requirements.response_format}\\n`;\n    }\n    if (instructions.execution_requirements.processing_approach) {\n      text += `• Processing Approach: ${instructions.execution_requirements.processing_approach}\\n`;\n    }\n    text += `\\n`;\n  }\n  \n  // Context reference\n  if (instructions.context_reference) {\n    text += `CONTEXT REFERENCE:\\n`;\n    Object.entries(instructions.context_reference).forEach(([key, value]) => {\n      text += `• ${key}: ${value}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  return text;\n}\n\n// Helper functions for different section types\nfunction buildCategorizationSection(methodology) {\n  let text = `MULTI-IDEA PARSING RULES:\\n`;\n  if (methodology.multi_idea_parsing_rules) {\n    methodology.multi_idea_parsing_rules.forEach(rule => {\n      text += `• ${rule}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  if (methodology.database_routing_criteria) {\n    text += `DATABASE ROUTING CRITERIA:\\n\\n`;\n    Object.entries(methodology.database_routing_criteria).forEach(([dbType, criteria]) => {\n      text += `${dbType.toUpperCase()} DATABASE (${criteria.database_id}):\\n`;\n      text += `• Description: ${criteria.description}\\n`;\n      if (criteria.keywords) text += `• Keywords: ${criteria.keywords.join(', ')}\\n`;\n      if (criteria.examples) text += `• Examples: ${criteria.examples.join(', ')}\\n`;\n      text += `\\n`;\n    });\n  }\n  \n  if (methodology.tagging_rules) {\n    text += `TAGGING RULES:\\n`;\n    text += `• Maximum Tags: ${methodology.tagging_rules.max_tags}\\n`;\n    if (methodology.tagging_rules.available_tags) {\n      text += `• Available Tags: ${methodology.tagging_rules.available_tags.join(', ')}\\n`;\n    }\n    if (methodology.tagging_rules.selection_criteria) {\n      text += `• Selection Criteria: ${methodology.tagging_rules.selection_criteria}\\n`;\n    }\n    text += `\\n`;\n  }\n  \n  if (methodology.analysis_requirements) {\n    text += `ANALYSIS REQUIREMENTS:\\n`;\n    Object.entries(methodology.analysis_requirements).forEach(([key, value]) => {\n      text += `• ${key.replace(/_/g, ' ')}: ${value}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  return text;\n}\n\nfunction buildDatabaseExecutionSection(execution) {\n  let text = `DATABASE EXECUTION INSTRUCTIONS:\\n\\n`;\n  \n  if (execution.operations) {\n    text += `OPERATIONS TO PERFORM:\\n`;\n    execution.operations.forEach((op, index) => {\n      text += `${index + 1}. ${op.action.toUpperCase()}\\n`;\n      text += `   • Target Database: ${op.target_database_id}\\n`;\n      text += `   • Page ID: ${op.page_id || 'new'}\\n`;\n      if (op.properties) {\n        text += `   • Properties to Update:\\n`;\n        Object.entries(op.properties).forEach(([key, value]) => {\n          text += `     - ${key}: ${value}\\n`;\n        });\n      }\n      text += `\\n`;\n    });\n  }\n  \n  if (execution.validation_rules) {\n    text += `VALIDATION RULES:\\n`;\n    Object.entries(execution.validation_rules).forEach(([key, value]) => {\n      text += `• ${key.replace(/_/g, ' ')}: ${value}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  return text;\n}\n\nfunction buildContentProcessingSection(processing) {\n  let text = `CONTENT PROCESSING RULES:\\n`;\n  \n  if (processing.parsing_rules) {\n    processing.parsing_rules.forEach(rule => {\n      text += `• ${rule}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  if (processing.transformation_rules) {\n    text += `TRANSFORMATION RULES:\\n`;\n    processing.transformation_rules.forEach(rule => {\n      text += `• ${rule}\\n`;\n    });\n    text += `\\n`;\n  }\n  \n  return text;\n}\n\n// Build the instruction text\nconst instructionText = buildInstructionText(directorInstructions);\n\nconsole.log('=== GENERATED INSTRUCTION TEXT ===');\nconsole.log('Text Length:', instructionText.length);\nconsole.log('Generated Text:', instructionText);\n\n// Return parsed data\nreturn [{ \n  instructionText, \n  originalJSON: directorInstructions,\n  taskType: directorInstructions.instruction?.task_type || 'test_task',\n  taskId: directorInstructions.task_id,\n  agentId: directorInstructions.agent_id,\n  startTime: new Date().toISOString()\n}];"
+      },
+      "id": "parse-instructions",
+      "name": "Parse Director Instructions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 3000
+        }
+      },
+      "id": "gpt-model",
+      "name": "GPT-4o Mini Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [1000, 500],
+      "credentials": {
+        "openAiApi": {
+          "id": "1",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "{{ $json.instructionText }}",
+        "hasOutputParser": false,
+        "agent": "toolsAgent",
+        "options": {
+          "systemMessage": "You are the Notion Agent executing Director instructions.\n\n# EXECUTION APPROACH\n1. Read the task objective and requirements carefully\n2. Use the provided methodology and rules to execute the task\n3. Apply all specified validation and processing rules\n4. Use the required MCP tools as instructed\n5. Return results in the specified JSON format\n\n# RESPONSE FORMAT\nReturn ONLY JSON in this exact structure:\n{\n  \"agent_id\": \"{{ $json.agentId || 'notion' }}\",\n  \"task_id\": \"{{ $json.taskId || 'test_task' }}\",\n  \"phase\": \"{{ $json.taskType }}_complete\",\n  \"timestamp\": \"ISO_timestamp\",\n  \"execution_time_ms\": number,\n  \"results\": {\n    // Task-specific results based on task type\n    // For categorization: ideas_processed array with categorization analysis\n    // For database_updates: operations_completed array with success/failure status\n    // For content_processing: processed_content with transformations applied\n  },\n  \"status\": {\n    \"success\": boolean,\n    \"errors\": [],\n    \"next_phase\": \"string\"\n  },\n  \"context_updates\": {\n    \"api_calls\": number,\n    \"tools_used\": [],\n    \"performance_notes\": \"string\"\n  }\n}\n\n**CRITICAL: Output only valid JSON. No explanations or summaries. Focus solely on the task described in the instructions.**",
+          "maxIterations": 8
+        }
+      },
+      "id": "notion-agent",
+      "name": "Notion Agent (Director Test)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get ideas from Notion database with filtering options. TESTING: Get exactly 1 idea only.",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas?limit={limit}&filter={filter}&status={status}&daysBack={daysBack}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "limit",
+              "description": "TESTING: Always use 1 to get exactly one idea"
+            },
+            {
+              "name": "filter",
+              "description": "Optional text search filter"
+            },
+            {
+              "name": "status",
+              "description": "Status filter: 'Not Started', 'In Progress', 'Done'"
+            },
+            {
+              "name": "daysBack",
+              "description": "Filter recent ideas (7 = this week, 1 = today)"
+            }
+          ]
+        }
+      },
+      "id": "get-ideas-tool",
+      "name": "Notion Get Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get specific idea by ID for detailed analysis",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "idea_id",
+              "description": "The ID of the specific idea to retrieve"
+            }
+          ]
+        }
+      },
+      "id": "get-idea-by-id-tool",
+      "name": "Notion Get Idea By ID",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1000, 280]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Update idea status - simplified for testing. REQUIRED: Always provide status parameter.",
+        "method": "PUT",
+        "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"status\": \"{status}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "idea_id",
+              "description": "ID of idea to update"
+            },
+            {
+              "name": "status",
+              "description": "REQUIRED: Use 'Not Started', 'In Progress', or 'Done'"
+            }
+          ]
+        }
+      },
+      "id": "update-idea-tool",
+      "name": "Notion Update Idea",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1000, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process and validate Notion Agent response\nconst agentResponse = $json;\nconst startTime = new Date($('Parse Director Instructions').first().json.startTime).getTime();\nconst endTime = new Date().getTime();\nconst totalExecutionTime = endTime - startTime;\n\nconsole.log('=== NOTION AGENT RESPONSE ===');\nconsole.log('Response Type:', typeof agentResponse.output);\nconsole.log('Response Length:', agentResponse.output?.length || 0);\nconsole.log('Raw Response:', agentResponse.output);\n\n// Try to parse the agent's JSON response\nlet parsedResponse;\ntry {\n  // The agent output should be JSON\n  if (typeof agentResponse.output === 'string') {\n    parsedResponse = JSON.parse(agentResponse.output);\n  } else {\n    parsedResponse = agentResponse.output;\n  }\n  \n  console.log('Parsed Agent Response:', JSON.stringify(parsedResponse, null, 2));\n  \n} catch (error) {\n  console.log('JSON Parsing Error:', error.message);\n  \n  // Create a fallback response if JSON parsing fails\n  parsedResponse = {\n    agent_id: 'notion',\n    task_id: $('Parse Director Instructions').first().json.taskId || 'test_task',\n    phase: 'execution_complete',\n    timestamp: new Date().toISOString(),\n    execution_time_ms: totalExecutionTime,\n    results: {\n      summary: {\n        status: 'json_parse_error',\n        raw_output: agentResponse.output?.substring(0, 500) || 'No output',\n        error: error.message\n      }\n    },\n    status: {\n      success: false,\n      errors: [`JSON parsing failed: ${error.message}`],\n      next_phase: 'error_recovery'\n    },\n    context_updates: {\n      api_calls: 0,\n      tools_used: [],\n      performance_notes: 'Agent response was not valid JSON'\n    }\n  };\n}\n\n// Validate the parsed response\nconst validation = {\n  hasAgentId: !!parsedResponse.agent_id,\n  hasTaskId: !!parsedResponse.task_id,\n  hasPhase: !!parsedResponse.phase,\n  hasTimestamp: !!parsedResponse.timestamp,\n  hasResults: !!parsedResponse.results,\n  hasStatus: !!parsedResponse.status,\n  hasContextUpdates: !!parsedResponse.context_updates\n};\n\nconst isValidResponse = Object.values(validation).every(v => v);\n\nconsole.log('Response Validation:', validation);\nconsole.log('Is Valid Response:', isValidResponse);\n\n// Add execution time if not present\nif (!parsedResponse.execution_time_ms) {\n  parsedResponse.execution_time_ms = totalExecutionTime;\n}\n\n// Ensure timestamp is present\nif (!parsedResponse.timestamp) {\n  parsedResponse.timestamp = new Date().toISOString();\n}\n\n// Create final response for Director\nconst directorResponse = {\n  success: isValidResponse && (parsedResponse.status?.success !== false),\n  agent_response: parsedResponse,\n  validation: validation,\n  execution_metrics: {\n    total_time_ms: totalExecutionTime,\n    response_size: JSON.stringify(parsedResponse).length,\n    valid_json: isValidResponse\n  },\n  test_metadata: {\n    director_test: true,\n    original_task_id: $('Parse Director Instructions').first().json.taskId,\n    workflow_timestamp: new Date().toISOString()\n  }\n};\n\nconsole.log('=== FINAL DIRECTOR RESPONSE ===');\nconsole.log('Success:', directorResponse.success);\nconsole.log('Response Size:', directorResponse.execution_metrics.response_size);\nconsole.log('Total Execution Time:', directorResponse.execution_metrics.total_time_ms, 'ms');\n\nreturn [directorResponse];"
+      },
+      "id": "process-response",
+      "name": "Process Agent Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "X-Director-Test",
+                "value": "true"
+              },
+              {
+                "name": "X-Agent-Response-Size",
+                "value": "={{ $json.execution_metrics.response_size }}"
+              },
+              {
+                "name": "X-Execution-Time",
+                "value": "={{ $json.execution_metrics.total_time_ms }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "webhook-response",
+      "name": "Return to Director",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Director Instructions Webhook": {
+      "main": [
+        [
+          {
+            "node": "Log Director Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Director Instructions": {
+      "main": [
+        [
+          {
+            "node": "Parse Director Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Director Instructions": {
+      "main": [
+        [
+          {
+            "node": "Notion Agent (Director Test)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Agent (Director Test)": {
+      "main": [
+        [
+          {
+            "node": "Process Agent Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Agent Response": {
+      "main": [
+        [
+          {
+            "node": "Return to Director",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4o Mini Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Notion Agent (Director Test)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Get Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Director Test)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Get Idea By ID": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Director Test)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Update Idea": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Director Test)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["director-test", "integration"],
+  "triggerCount": 0,
+  "updatedAt": "2025-09-03T20:00:00.000Z",
+  "versionId": "director-test-v1"
+}
