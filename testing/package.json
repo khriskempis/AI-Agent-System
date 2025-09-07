@@ -1,0 +1,25 @@
+{
+  "name": "mcp-server-testing",
+  "version": "1.0.0",
+  "description": "Testing utilities for MCP Server components",
+  "type": "module",
+  "scripts": {
+    "test:director": "./test-director-endpoints.sh",
+    "test:database": "tsx test-database-endpoints.ts",
+    "test:database:quick": "./quick-database-test.sh",
+    "test:all": "npm run test:director && npm run test:database",
+    "quick-test": "./quick-test.sh"
+  },
+  "dependencies": {
+    "axios": "^1.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.13",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

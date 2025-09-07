@@ -1,0 +1,60 @@
+{
+  "properties": {
+    "Name": {
+      "title": [
+        {
+          "text": {
+            "content": "AI Video Generator Project"
+          }
+        }
+      ]
+    },
+    "Description": {
+      "rich_text": [
+        {
+          "text": {
+            "content": "Build an open source AI video generation tool using Stable Video Diffusion. This project will focus on creating a user-friendly interface for generating high-quality videos from text prompts and images. Key features include batch processing, custom model fine-tuning, and integration with popular video editing workflows."
+          }
+        }
+      ]
+    },
+    "Status": {
+      "select": {
+        "name": "Not Started"
+      }
+    },
+    "Priority": {
+      "select": {
+        "name": "High"
+      }
+    },
+    "Category": {
+      "select": {
+        "name": "AI/ML Project"
+      }
+    },
+    "Tags": {
+      "multi_select": [
+        {"name": "ai"},
+        {"name": "video"},
+        {"name": "open-source"},
+        {"name": "stable-diffusion"},
+        {"name": "machine-learning"}
+      ]
+    },
+    "Source": {
+      "rich_text": [
+        {
+          "text": {
+            "content": "Categorized from Ideas Database - ID: 16cd7be3dbcd80e1aac9c3a95ffaa61a"
+          }
+        }
+      ]
+    },
+    "Created Date": {
+      "date": {
+        "start": "2025-01-15"
+      }
+    }
+  }
+}
