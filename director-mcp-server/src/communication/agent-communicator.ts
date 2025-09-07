@@ -4,12 +4,12 @@
  */
 
 import axios, { AxiosResponse } from 'axios';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.js';
 import {
   DirectorToAgentInstruction,
   AgentToDirectorResponse,
   MCPToolResult
-} from '../types/workflow';
+} from '../types/workflow.js';
 
 export interface AgentEndpoint {
   agent_id: string;

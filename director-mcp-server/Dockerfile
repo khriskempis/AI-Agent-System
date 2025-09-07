@@ -60,12 +60,8 @@ RUN chown -R director:nodejs /app
 # Switch to non-root user
 USER director
 
-# Expose port
-EXPOSE 3002
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3002/health || exit 1
+# Note: No port exposure needed - MCP uses stdio transport
+# Note: No health check needed - MCP server communicates via stdio
 
 # Use tini as entrypoint for proper signal handling
 ENTRYPOINT ["/sbin/tini", "--"]

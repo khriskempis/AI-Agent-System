@@ -65,32 +65,13 @@ fi
 
 # Set environment variables
 export NODE_ENV="${NODE_ENV:-development}"
-export PORT="${DIRECTOR_MCP_PORT:-3002}"
 export LOG_LEVEL="${LOG_LEVEL:-info}"
-export CORS_ORIGIN="${CORS_ORIGIN:-*}"
 
 echo -e "${GREEN}✅ Environment configured:${NC}"
 echo "   Node Environment: $NODE_ENV"
-echo "   Port: $PORT"
 echo "   Log Level: $LOG_LEVEL"
 echo "   Template Directory: $TEMPLATE_DIR"
-
-# Check if port is available
-if command -v lsof > /dev/null 2>&1; then
-    if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
-        echo -e "${YELLOW}⚠️  Port $PORT is already in use${NC}"
-        echo -e "${YELLOW}   Attempting to stop existing process...${NC}"
-        
-        # Kill existing process
-        lsof -ti:$PORT | xargs kill -9 2>/dev/null || true
-        sleep 2
-        
-        if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
-            echo -e "${RED}❌ Could not free port $PORT${NC}"
-            exit 1
-        fi
-    fi
-fi
+echo "   Transport: stdio (MCP protocol)"
 
 # Function to handle cleanup on exit
 cleanup() {
@@ -106,7 +87,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # Start the server
-echo -e "${GREEN}🚀 Starting Director MCP Server on port $PORT...${NC}"
+echo -e "${GREEN}🚀 Starting Director MCP Server (MCP Protocol)...${NC}"
 echo ""
 
 if [ "$1" = "--dev" ]; then
@@ -127,35 +108,31 @@ if kill -0 $SERVER_PID 2>/dev/null; then
     echo -e "${GREEN}✅ Director MCP Server started successfully${NC}"
     echo ""
     echo -e "${BLUE}📡 Server Information:${NC}"
-    echo "   • Health Check: http://localhost:$PORT/health"
-    echo "   • API Documentation: http://localhost:$PORT/api/stats"
-    echo "   • Template Endpoint: http://localhost:$PORT/api/mcp/get-workflow-template"
-    echo "   • Agent Health: http://localhost:$PORT/api/agents/health"
+    echo "   • Protocol: MCP (Model Context Protocol)"
+    echo "   • Transport: stdio (not HTTP)"
+    echo "   • Communication: Direct MCP client connection required"
     echo ""
     echo -e "${BLUE}🔧 MCP Tools Available:${NC}"
-    echo "   • getWorkflowTemplate(workflow_type)"
-    echo "   • createAgentInstructions(options)"
-    echo "   • executeWorkflow(parameters)"
+    echo "   • get_workflow_template - Load workflow templates"
+    echo "   • create_agent_instructions - Generate agent instructions"
+    echo "   • execute_workflow - Full workflow execution"
+    echo "   • send_agent_instructions - Direct agent communication"
+    echo "   • check_agent_health - Agent health monitoring"
+    echo "   • get_workflow_context - Context state management"
+    echo "   • get_system_stats - System monitoring"
     echo ""
     echo -e "${BLUE}🎯 Workflow Templates:${NC}"
-    echo "   • idea_categorization (Multi-idea parsing and database routing)"
+    echo "   • idea-categorization-v1 (Multi-idea parsing and routing)"
     echo "   • [Future templates will appear here]"
     echo ""
-    
-    # Test health endpoint
-    echo -e "${YELLOW}🏥 Testing health endpoint...${NC}"
-    if command -v curl > /dev/null 2>&1; then
-        if curl -s "http://localhost:$PORT/health" > /dev/null; then
-            echo -e "${GREEN}✅ Health check passed${NC}"
-        else
-            echo -e "${YELLOW}⚠️  Health check failed (server may still be starting)${NC}"
-        fi
-    else
-        echo -e "${YELLOW}⚠️  curl not available, skipping health check${NC}"
-    fi
-    
+    echo -e "${BLUE}🤖 Supported Agents:${NC}"
+    echo "   • notion - Notion database operations"
+    echo "   • planner - Strategic planning (future)"
+    echo "   • validation - Quality assurance (future)"
     echo ""
+    
     echo -e "${GREEN}🎉 Director MCP Server is ready for workflow orchestration!${NC}"
+    echo -e "${BLUE}Connect via MCP client to access tools${NC}"
     echo -e "${BLUE}Press Ctrl+C to stop the server${NC}"
     echo ""
     

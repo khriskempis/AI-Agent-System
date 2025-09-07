@@ -1,509 +1,729 @@
+#!/usr/bin/env node
+
 /**
- * Director MCP Server - Main Entry Point
- * Intelligent workflow orchestration and multi-agent coordination server
+ * Director MCP Server - Intelligent Workflow Orchestration
+ * Properly implementing MCP protocol for agent communication
  */
 
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import compression from 'compression';
-import { logger, requestLogger } from './utils/logger';
-import { TemplateManager } from './templates/template-manager';
-import { ContextManager } from './context/context-manager';
-import { AgentCommunicator } from './communication/agent-communicator';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
-  DirectorToAgentInstruction,
-  AgentToDirectorResponse,
+  CallToolRequestSchema,
+  ErrorCode,
+  ListToolsRequestSchema,
+  McpError,
+} from '@modelcontextprotocol/sdk/types.js';
+import dotenv from 'dotenv';
+import { z } from 'zod';
+import { logger } from './utils/logger.js';
+import { initializeSharedServices, getSharedServices, cleanupSharedServices } from './shared-services.js';
+import {
   WorkflowTemplateRequest,
-  MCPToolResult,
   TemplateProcessingOptions
-} from './types/workflow';
+} from './types/workflow.js';
 
-class DirectorMCPServer {
-  private app: express.Application;
-  private templateManager: TemplateManager;
-  private contextManager: ContextManager;
-  private agentCommunicator: AgentCommunicator;
-  private port: number;
-  private server: any;
+// Load environment variables
+dotenv.config();
 
-  constructor() {
-    this.app = express();
-    this.port = parseInt(process.env.PORT || '3002');
-    
-    // Initialize managers
-    this.templateManager = new TemplateManager();
-    this.contextManager = new ContextManager();
-    this.agentCommunicator = new AgentCommunicator();
-    
-    this.setupMiddleware();
-    this.setupRoutes();
-    this.setupErrorHandling();
+// Validate environment (optional for director server)
+const envSchema = z.object({
+  NODE_ENV: z.string().default('development'),
+  LOG_LEVEL: z.string().default('info'),
+});
+
+console.error('Starting Director MCP Server...');
+try {
+  const env = envSchema.parse(process.env);
+  console.error('✅ Environment validation passed');
+} catch (error) {
+  console.error('❌ Environment validation failed:', error);
+  // Don't exit - continue with defaults
+}
+
+const env = envSchema.parse(process.env);
+
+// Initialize shared services
+console.error('Initializing Director MCP Server components...');
+let templateManager, contextManager, agentCommunicator;
+
+try {
+  const services = initializeSharedServices();
+  ({ templateManager, contextManager, agentCommunicator } = services);
+  console.error('✅ All components initialized');
+} catch (error) {
+  console.error('❌ Component initialization failed:', error);
+  process.exit(1);
+}
+
+// Create MCP server
+const server = new Server(
+  {
+    name: 'director-mcp-server',
+    version: '1.0.0',
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
   }
+);
 
-  /**
-   * Setup Express Middleware
-   */
-  private setupMiddleware(): void {
-    // Security and performance middleware
-    this.app.use(helmet());
-    this.app.use(compression());
-    this.app.use(cors({
-      origin: process.env.CORS_ORIGIN || '*',
-      credentials: true
-    }));
-    
-    // Body parsing
-    this.app.use(express.json({ limit: '10mb' }));
-    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-    
-    // Request logging
-    this.app.use(requestLogger);
-  }
+// List available tools
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      // ====================================================================
+      // WORKFLOW TEMPLATE TOOLS
+      // ====================================================================
+      {
+        name: 'get_workflow_template',
+        description: 'Retrieve and load a workflow template by type',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            workflow_type: {
+              type: 'string',
+              description: 'The type of workflow template to load (e.g., "idea-categorization-v1")',
+            },
+            parameters: {
+              type: 'object',
+              description: 'Optional parameters to customize the template',
+              additionalProperties: true,
+            },
+            cache_duration: {
+              type: 'number',
+              description: 'Cache duration in seconds (optional)',
+            },
+          },
+          required: ['workflow_type'],
+        },
+      },
+      {
+        name: 'create_agent_instructions',
+        description: 'Extract essential logic from template and create focused JSON instructions for a target agent',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            workflow_type: {
+              type: 'string',
+              description: 'The workflow template type to process',
+            },
+            target_agent: {
+              type: 'string',
+              description: 'The target agent ID (notion, planner, validation)',
+            },
+            parameters: {
+              type: 'object',
+              description: 'Runtime parameters to populate in the template',
+              additionalProperties: true,
+            },
+            phase_override: {
+              type: 'string',
+              description: 'Optional specific phase to override automatic phase selection',
+            },
+          },
+          required: ['workflow_type', 'target_agent'],
+        },
+      },
+      {
+        name: 'execute_workflow',
+        description: 'Full workflow execution - create instructions and send to agent',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            workflow_type: {
+              type: 'string',
+              description: 'The workflow template type to execute',
+            },
+            target_agent: {
+              type: 'string',
+              description: 'The agent to execute the workflow',
+            },
+            parameters: {
+              type: 'object',
+              description: 'Workflow parameters and data',
+              additionalProperties: true,
+            },
+          },
+          required: ['workflow_type', 'target_agent'],
+        },
+      },
 
-  /**
-   * Setup API Routes
-   */
-  private setupRoutes(): void {
-    // Health check
-    this.app.get('/health', (req, res) => {
-      res.json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        version: '1.0.0',
-        services: {
-          template_manager: 'active',
-          context_manager: 'active',
-          agent_communicator: 'active'
-        }
-      });
-    });
+      // ====================================================================
+      // AGENT COMMUNICATION TOOLS
+      // ====================================================================
+      {
+        name: 'send_agent_instructions',
+        description: 'Send structured instructions to a specific agent',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            agent_id: {
+              type: 'string',
+              description: 'Target agent ID',
+            },
+            instructions: {
+              type: 'object',
+              description: 'Complete DirectorToAgentInstruction object',
+              additionalProperties: true,
+            },
+          },
+          required: ['agent_id', 'instructions'],
+        },
+      },
+      {
+        name: 'check_agent_health',
+        description: 'Check the health status of a specific agent',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            agent_id: {
+              type: 'string',
+              description: 'Agent ID to check (notion, planner, validation)',
+            },
+          },
+          required: ['agent_id'],
+        },
+      },
+      {
+        name: 'check_all_agents_health',
+        description: 'Check health status of all configured agents',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'get_agent_capabilities',
+        description: 'Get capabilities and specifications for an agent',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            agent_id: {
+              type: 'string',
+              description: 'Agent ID to get capabilities for',
+            },
+          },
+          required: ['agent_id'],
+        },
+      },
 
-    // ========================================================================
-    // MCP TOOLS - Core Director Agent Functions
-    // ========================================================================
+      // ====================================================================
+      // CONTEXT MANAGEMENT TOOLS  
+      // ====================================================================
+      {
+        name: 'create_workflow_context',
+        description: 'Create a new workflow context for tracking multi-phase workflows',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            workflow_id: {
+              type: 'string',
+              description: 'Workflow identifier',
+            },
+            parameters: {
+              type: 'object',
+              description: 'Initial workflow parameters',
+              additionalProperties: true,
+            },
+          },
+          required: ['workflow_id'],
+        },
+      },
+      {
+        name: 'get_workflow_context',
+        description: 'Retrieve current state of a workflow context',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            context_id: {
+              type: 'string',
+              description: 'Context ID to retrieve',
+            },
+          },
+          required: ['context_id'],
+        },
+      },
+      {
+        name: 'update_context_with_agent_response',
+        description: 'Update workflow context with an agent response',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            context_id: {
+              type: 'string',
+              description: 'Context ID to update',
+            },
+            agent_response: {
+              type: 'object',
+              description: 'AgentToDirectorResponse object',
+              additionalProperties: true,
+            },
+          },
+          required: ['context_id', 'agent_response'],
+        },
+      },
+      {
+        name: 'get_context_for_agent',
+        description: 'Get relevant context information for agent decision making',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            context_id: {
+              type: 'string',
+              description: 'Context ID',
+            },
+            agent_id: {
+              type: 'string',
+              description: 'Agent ID requesting context',
+            },
+          },
+          required: ['context_id', 'agent_id'],
+        },
+      },
+      {
+        name: 'list_active_contexts',
+        description: 'List all currently active workflow contexts',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
 
-    /**
-     * MCP Tool: Get Workflow Template
-     * Primary tool for Director Agent to load workflow templates
-     */
-    this.app.post('/api/mcp/get-workflow-template', async (req, res) => {
-      try {
-        const { workflow_type, parameters, cache_duration }: WorkflowTemplateRequest = req.body;
+      // ====================================================================
+      // SYSTEM MANAGEMENT TOOLS
+      // ====================================================================
+      {
+        name: 'get_system_stats',
+        description: 'Get comprehensive system statistics and status',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'clear_template_cache',
+        description: 'Clear the template cache to force reload',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+    ],
+  };
+});
+
+// Handle tool calls
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  try {
+    switch (name) {
+      // =====================================================================
+      // WORKFLOW TEMPLATE TOOLS
+      // =====================================================================
+      case 'get_workflow_template': {
+        const workflow_type = args?.workflow_type as string;
+        const parameters = args?.parameters as Record<string, any>;
+        const cache_duration = args?.cache_duration as number;
 
         if (!workflow_type) {
-          return res.status(400).json({
-            success: false,
-            error: 'workflow_type is required'
-          });
+          throw new McpError(ErrorCode.InvalidParams, 'workflow_type parameter is required');
         }
 
-        const result = await this.templateManager.getWorkflowTemplate(workflow_type, parameters);
+        const result = await templateManager.getWorkflowTemplate(workflow_type, parameters);
         
-        if (cache_duration && result.success) {
-          res.set('Cache-Control', `public, max-age=${cache_duration}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'create_agent_instructions': {
+        const workflow_type = args?.workflow_type as string;
+        const target_agent = args?.target_agent as string;
+        const parameters = args?.parameters as Record<string, any> || {};
+        const phase_override = args?.phase_override as string;
+
+        if (!workflow_type) {
+          throw new McpError(ErrorCode.InvalidParams, 'workflow_type parameter is required');
+        }
+        if (!target_agent) {
+          throw new McpError(ErrorCode.InvalidParams, 'target_agent parameter is required');
         }
 
-        return res.json(result);
+        const options: TemplateProcessingOptions = {
+          workflow_type,
+          parameters,
+          target_agent,
+          phase_override
+        };
 
-      } catch (error) {
-        logger.error('Error in get-workflow-template MCP tool', { error: error instanceof Error ? error.message : 'Unknown error occurred' });
-        return res.status(500).json({
-          success: false,
-          error: 'Internal server error'
-        });
+        const instructions = await templateManager.createAgentInstructions(options);
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                data: instructions,
+                metadata: {
+                  instruction_size: JSON.stringify(instructions).length,
+                  created_at: new Date().toISOString()
+                }
+              }, null, 2),
+            },
+          ],
+        };
       }
-    });
 
-    /**
-     * MCP Tool: Create Agent Instructions
-     * Extract essential logic from templates and create focused JSON instructions
-     */
-    this.app.post('/api/mcp/create-agent-instructions', async (req, res) => {
-      try {
-        const options: TemplateProcessingOptions = req.body;
+      case 'execute_workflow': {
+        const workflow_type = args?.workflow_type as string;
+        const target_agent = args?.target_agent as string;
+        const parameters = args?.parameters as Record<string, any> || {};
 
-        if (!options.workflow_type || !options.target_agent) {
-          return res.status(400).json({
-            success: false,
-            error: 'workflow_type and target_agent are required'
-          });
+        if (!workflow_type) {
+          throw new McpError(ErrorCode.InvalidParams, 'workflow_type parameter is required');
         }
-
-        const instructions = await this.templateManager.createAgentInstructions(options);
-
-        return res.json({
-          success: true,
-          data: instructions,
-          metadata: {
-            instruction_size: JSON.stringify(instructions).length,
-            created_at: new Date().toISOString()
-          }
-        });
-
-      } catch (error) {
-        logger.error('Error creating agent instructions', { error: error instanceof Error ? error.message : 'Unknown error occurred', options: req.body });
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
-      }
-    });
-
-    /**
-     * MCP Tool: Execute Workflow
-     * Full workflow execution - create instructions and send to agent
-     */
-    this.app.post('/api/mcp/execute-workflow', async (req, res) => {
-      try {
-        const { workflow_type, parameters, target_agent } = req.body;
+        if (!target_agent) {
+          throw new McpError(ErrorCode.InvalidParams, 'target_agent parameter is required');
+        }
 
         // Create workflow context
-        const context = this.contextManager.createWorkflowContext(workflow_type, parameters);
+        const context = contextManager.createWorkflowContext(workflow_type, parameters);
 
         // Create agent instructions
-        const instructions = await this.templateManager.createAgentInstructions({
+        const instructions = await templateManager.createAgentInstructions({
           workflow_type,
           parameters: { ...parameters, context_id: context.context_id },
           target_agent
         });
 
         // Send instructions to agent
-        const agentResult = await this.agentCommunicator.sendInstructionsToAgent(target_agent, instructions);
+        const agentResult = await agentCommunicator.sendInstructionsToAgent(target_agent, instructions);
 
         if (agentResult.success) {
           // Update context with agent response
-          const contextUpdate = this.contextManager.updateContextWithAgentResponse(
+          const contextUpdate = contextManager.updateContextWithAgentResponse(
             context.context_id,
-            agentResult.data as AgentToDirectorResponse
+            agentResult.data
           );
 
-          return res.json({
-            success: true,
-            data: {
-              context_id: context.context_id,
-              agent_response: agentResult.data,
-              context_update: contextUpdate.data,
-              workflow_complete: contextUpdate.data?.workflow_complete || false
-            }
-          });
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  data: {
+                    context_id: context.context_id,
+                    agent_response: agentResult.data,
+                    context_update: contextUpdate.data,
+                    workflow_complete: contextUpdate.data?.workflow_complete || false
+                  }
+                }, null, 2),
+              },
+            ],
+          };
         } else {
-          return res.status(500).json(agentResult);
+          throw new McpError(ErrorCode.InternalError, `Workflow execution failed: ${agentResult.error}`);
+        }
+      }
+
+      // =====================================================================
+      // AGENT COMMUNICATION TOOLS
+      // =====================================================================
+      case 'send_agent_instructions': {
+        const agent_id = args?.agent_id as string;
+        const instructions = args?.instructions as any;
+
+        if (!agent_id) {
+          throw new McpError(ErrorCode.InvalidParams, 'agent_id parameter is required');
+        }
+        if (!instructions) {
+          throw new McpError(ErrorCode.InvalidParams, 'instructions parameter is required');
         }
 
-      } catch (error) {
-        logger.error('Error executing workflow', { error: error instanceof Error ? error.message : 'Unknown error occurred' });
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
-      }
-    });
-
-    // ========================================================================
-    // AGENT COMMUNICATION ENDPOINTS
-    // ========================================================================
-
-    /**
-     * Send Instructions to Agent
-     */
-    this.app.post('/api/agents/:agentId/execute', async (req, res) => {
-      try {
-        const { agentId } = req.params;
-        const instructions: DirectorToAgentInstruction = req.body;
-
-        const result = await this.agentCommunicator.sendInstructionsToAgent(agentId, instructions);
+        const result = await agentCommunicator.sendInstructionsToAgent(agent_id, instructions);
         
-        if (result.success) {
-          return res.json(result);
-        } else {
-          return res.status(500).json(result);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'check_agent_health': {
+        const agent_id = args?.agent_id as string;
+        
+        if (!agent_id) {
+          throw new McpError(ErrorCode.InvalidParams, 'agent_id parameter is required');
         }
 
-      } catch (error) {
-        logger.error('Error sending instructions to agent', { error: error instanceof Error ? error.message : 'Unknown error occurred' });
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
+        const result = await agentCommunicator.checkAgentHealth(agent_id);
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
       }
-    });
 
-    /**
-     * Receive Agent Response
-     */
-    this.app.post('/api/agents/response', async (req, res) => {
-      try {
-        const agentResponse: AgentToDirectorResponse = req.body;
-        const { context_id } = req.query;
+      case 'check_all_agents_health': {
+        const result = await agentCommunicator.checkAllAgentsHealth();
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_agent_capabilities': {
+        const agent_id = args?.agent_id as string;
+        
+        if (!agent_id) {
+          throw new McpError(ErrorCode.InvalidParams, 'agent_id parameter is required');
+        }
+
+        const result = await agentCommunicator.getAgentCapabilities(agent_id);
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      // =====================================================================
+      // CONTEXT MANAGEMENT TOOLS
+      // =====================================================================
+      case 'create_workflow_context': {
+        const workflow_id = args?.workflow_id as string;
+        const parameters = args?.parameters as Record<string, any>;
+
+        if (!workflow_id) {
+          throw new McpError(ErrorCode.InvalidParams, 'workflow_id parameter is required');
+        }
+
+        const context = contextManager.createWorkflowContext(workflow_id, parameters);
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                data: context
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_workflow_context': {
+        const context_id = args?.context_id as string;
 
         if (!context_id) {
-          return res.status(400).json({
-            success: false,
-            error: 'context_id query parameter is required'
-          });
+          throw new McpError(ErrorCode.InvalidParams, 'context_id parameter is required');
         }
 
-        const result = this.contextManager.updateContextWithAgentResponse(
-          context_id as string,
-          agentResponse
-        );
-
-        return res.json(result);
-
-      } catch (error) {
-        logger.error('Error processing agent response', { error: error instanceof Error ? error.message : 'Unknown error occurred' });
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
-      }
-    });
-
-    /**
-     * Check Agent Health
-     */
-    this.app.get('/api/agents/:agentId/health', async (req, res) => {
-      try {
-        const { agentId } = req.params;
-        const result = await this.agentCommunicator.checkAgentHealth(agentId);
-        return res.json(result);
-      } catch (error) {
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
-      }
-    });
-
-    /**
-     * Check All Agents Health
-     */
-    this.app.get('/api/agents/health', async (req, res) => {
-      try {
-        const result = await this.agentCommunicator.checkAllAgentsHealth();
-        return res.json(result);
-      } catch (error) {
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
-      }
-    });
-
-    // ========================================================================
-    // CONTEXT MANAGEMENT ENDPOINTS
-    // ========================================================================
-
-    /**
-     * Get Workflow Context
-     */
-    this.app.get('/api/context/:contextId', (req, res) => {
-      try {
-        const { contextId } = req.params;
-        const context = this.contextManager.getWorkflowContext(contextId);
+        const context = contextManager.getWorkflowContext(context_id);
         
-        if (context) {
-          return res.json({
-            success: true,
-            data: context
-          });
-        } else {
-          return res.status(404).json({
-            success: false,
-            error: 'Context not found'
-          });
+        if (!context) {
+          throw new McpError(ErrorCode.InvalidParams, `Context not found: ${context_id}`);
         }
-      } catch (error) {
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
-      }
-    });
 
-    /**
-     * List Active Contexts
-     */
-    this.app.get('/api/context', (req, res) => {
-      try {
-        const contexts = this.contextManager.listActiveContexts();
-        return res.json({
-          success: true,
-          data: contexts
-        });
-      } catch (error) {
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
-      }
-    });
-
-    /**
-     * Get Context for Agent
-     */
-    this.app.get('/api/context/:contextId/agent/:agentId', (req, res) => {
-      try {
-        const { contextId, agentId } = req.params;
-        const context = this.contextManager.getContextForAgent(contextId, agentId);
-        
-        if (context) {
-          return res.json({
-            success: true,
-            data: context
-          });
-        } else {
-          return res.status(404).json({
-            success: false,
-            error: 'Context not found'
-          });
-        }
-      } catch (error) {
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
-      }
-    });
-
-    // ========================================================================
-    // SYSTEM MANAGEMENT ENDPOINTS
-    // ========================================================================
-
-    /**
-     * Get System Statistics
-     */
-    this.app.get('/api/stats', (req, res) => {
-      try {
-        const stats = {
-          server: {
-            uptime: process.uptime(),
-            memory: process.memoryUsage(),
-            pid: process.pid,
-            version: '1.0.0'
-          },
-          template_manager: this.templateManager.getCacheStats(),
-          context_manager: this.contextManager.getStats(),
-          agent_communicator: this.agentCommunicator.getAgentStats()
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                data: context
+              }, null, 2),
+            },
+          ],
         };
-
-        return res.json({
-          success: true,
-          data: stats,
-          timestamp: new Date().toISOString()
-        });
-      } catch (error) {
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
       }
-    });
 
-    /**
-     * Clear Template Cache
-     */
-    this.app.post('/api/admin/clear-cache', (req, res) => {
-      try {
-        this.templateManager.clearCache();
-        return res.json({
-          success: true,
-          message: 'Template cache cleared'
-        });
-      } catch (error) {
-        return res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        });
+      case 'update_context_with_agent_response': {
+        const context_id = args?.context_id as string;
+        const agent_response = args?.agent_response as any;
+
+        if (!context_id) {
+          throw new McpError(ErrorCode.InvalidParams, 'context_id parameter is required');
+        }
+        if (!agent_response) {
+          throw new McpError(ErrorCode.InvalidParams, 'agent_response parameter is required');
+        }
+
+        const result = contextManager.updateContextWithAgentResponse(context_id, agent_response);
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
       }
-    });
-  }
 
-  /**
-   * Setup Error Handling
-   */
-  private setupErrorHandling(): void {
-    // 404 handler
-    this.app.use((req, res) => {
-      res.status(404).json({
-        success: false,
-        error: 'Endpoint not found',
-        path: req.path,
-        method: req.method
-      });
-    });
+      case 'get_context_for_agent': {
+        const context_id = args?.context_id as string;
+        const agent_id = args?.agent_id as string;
 
-    // Global error handler
-    this.app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-      logger.error('Unhandled error', {
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-        stack: error.stack,
-        path: req.path,
-        method: req.method
-      });
+        if (!context_id) {
+          throw new McpError(ErrorCode.InvalidParams, 'context_id parameter is required');
+        }
+        if (!agent_id) {
+          throw new McpError(ErrorCode.InvalidParams, 'agent_id parameter is required');
+        }
 
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error',
-        message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
-      });
-    });
-  }
+        const context = contextManager.getContextForAgent(context_id, agent_id);
+        
+        if (!context) {
+          throw new McpError(ErrorCode.InvalidParams, `Context not found for agent: ${agent_id}`);
+        }
 
-  /**
-   * Start the Server
-   */
-  async start(): Promise<void> {
-    try {
-      this.server = this.app.listen(this.port, () => {
-        logger.info('Director MCP Server started successfully', {
-          port: this.port,
-          environment: process.env.NODE_ENV || 'development',
-          pid: process.pid
-        });
-      });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                data: context
+              }, null, 2),
+            },
+          ],
+        };
+      }
 
-      // Graceful shutdown handling
-      process.on('SIGTERM', () => this.shutdown('SIGTERM'));
-      process.on('SIGINT', () => this.shutdown('SIGINT'));
+      case 'list_active_contexts': {
+        const contexts = contextManager.listActiveContexts();
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                data: contexts
+              }, null, 2),
+            },
+          ],
+        };
+      }
 
-    } catch (error) {
-      logger.error('Failed to start Director MCP Server', { 
-        error: error instanceof Error ? error.message : 'Unknown error occurred' 
-      });
+      // =====================================================================
+      // SYSTEM MANAGEMENT TOOLS
+      // =====================================================================
+      case 'get_system_stats': {
+        const { getSystemStats } = await import('./shared-services.js');
+        const stats = getSystemStats();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                data: stats,
+                timestamp: new Date().toISOString()
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'clear_template_cache': {
+        templateManager.clearCache();
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                message: 'Template cache cleared'
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      default:
+        throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+    }
+  } catch (error) {
+    if (error instanceof McpError) {
       throw error;
     }
+    throw new McpError(
+      ErrorCode.InternalError,
+      `Error executing tool ${name}: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
-
-  /**
-   * Graceful Shutdown
-   */
-  private async shutdown(signal: string): Promise<void> {
-    logger.info(`Received ${signal}, starting graceful shutdown`);
-
-    // Close HTTP server
-    if (this.server) {
-      this.server.close(() => {
-        logger.info('HTTP server closed');
-      });
-    }
-
-    // Cleanup managers
-    this.contextManager.shutdown();
-
-    logger.info('Director MCP Server shutdown complete');
-    process.exit(0);
-  }
-}
+});
 
 // Start the server
-if (require.main === module) {
-  const server = new DirectorMCPServer();
-  server.start().catch((error) => {
-    logger.error('Failed to start server', { error: error instanceof Error ? error.message : 'Unknown error occurred' });
-    process.exit(1);
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error('Director MCP Server running on stdio');
+  
+  // Keep the process alive for Docker daemon mode
+  const keepAlive = setInterval(() => {
+    // Do nothing, just keep the process alive
+  }, 30000); // Check every 30 seconds
+  
+  // Handle stdin close (normal for daemon mode)
+  process.stdin.on('close', () => {
+    console.error('stdin closed, but keeping process alive for Docker...');
   });
+  
+  process.stdin.on('error', (err) => {
+    console.error('stdin error (expected in Docker):', err.message);
+  });
+  
+  // Handle process termination gracefully
+  process.on('SIGINT', () => {
+    console.error('Received SIGINT, shutting down...');
+    clearInterval(keepAlive);
+    cleanupSharedServices();
+    process.exit(0);
+  });
+  
+  process.on('SIGTERM', () => {
+    console.error('Received SIGTERM, shutting down...');
+    clearInterval(keepAlive);
+    cleanupSharedServices();
+    process.exit(0);
+  });
+  
+  // Resume stdin to handle input if available
+  process.stdin.resume();
 }
 
-export default DirectorMCPServer;
+main().catch((error) => {
+  console.error('Fatal error in main():', error);
+  process.exit(1);
+});

@@ -4,7 +4,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.js';
 import {
   SharedWorkflowContext,
   AgentToDirectorResponse,
@@ -13,7 +13,7 @@ import {
   PerformanceMetrics,
   ErrorEntry,
   MCPToolResult
-} from '../types/workflow';
+} from '../types/workflow.js';
 
 export class ContextManager {
   private contexts: Map<string, SharedWorkflowContext> = new Map();
