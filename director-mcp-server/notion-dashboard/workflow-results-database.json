@@ -1,0 +1,127 @@
+{
+  "object": "database",
+  "title": [
+    {
+      "type": "text",
+      "text": {
+        "content": "📊 Workflow Results",
+        "link": null
+      }
+    }
+  ],
+  "description": [
+    {
+      "type": "text",
+      "text": {
+        "content": "Detailed results and analytics from workflow executions",
+        "link": null
+      }
+    }
+  ],
+  "properties": {
+    "Result ID": {
+      "title": {}
+    },
+    "Workflow Execution": {
+      "relation": {
+        "database_id": "workflow-executions-db-id",
+        "single_property": {}
+      }
+    },
+    "Ideas Categorized": {
+      "number": {}
+    },
+    "Projects Created": {
+      "number": {}
+    },
+    "Knowledge Entries": {
+      "number": {}
+    },
+    "Journal Entries": {
+      "number": {}
+    },
+    "Success Rate": {
+      "number": {
+        "format": "percent"
+      }
+    },
+    "Processing Time": {
+      "number": {}
+    },
+    "LLM Tokens Used": {
+      "number": {}
+    },
+    "API Calls Made": {
+      "number": {}
+    },
+    "Categories": {
+      "multi_select": {
+        "options": [
+          {
+            "name": "💼 Projects",
+            "color": "blue"
+          },
+          {
+            "name": "📚 Knowledge",
+            "color": "green"
+          },
+          {
+            "name": "📝 Journal",
+            "color": "yellow"
+          },
+          {
+            "name": "🎯 Tasks",
+            "color": "red"
+          }
+        ]
+      }
+    },
+    "Quality Score": {
+      "select": {
+        "options": [
+          {
+            "name": "⭐⭐⭐⭐⭐ Excellent",
+            "color": "green"
+          },
+          {
+            "name": "⭐⭐⭐⭐ Good",
+            "color": "blue"
+          },
+          {
+            "name": "⭐⭐⭐ Fair",
+            "color": "yellow"
+          },
+          {
+            "name": "⭐⭐ Poor",
+            "color": "orange"
+          },
+          {
+            "name": "⭐ Failed",
+            "color": "red"
+          }
+        ]
+      }
+    },
+    "Raw Results": {
+      "rich_text": {}
+    },
+    "Error Details": {
+      "rich_text": {}
+    },
+    "Performance Metrics": {
+      "rich_text": {}
+    },
+    "Agent Feedback": {
+      "rich_text": {}
+    },
+    "Improvement Notes": {
+      "rich_text": {}
+    },
+    "Created": {
+      "created_time": {}
+    },
+    "Modified": {
+      "last_edited_time": {}
+    }
+  }
+}
