@@ -34,7 +34,7 @@ async function main(): Promise<void> {
 
       for (const idea of ideas) {
         console.log(`\n${"=".repeat(60)}`);
-        console.log(`Processing: ${idea.name} (${idea.id})`);
+        console.log(`Processing: ${idea.title} (${idea.id})`);
         console.log("=".repeat(60));
         await categorizeIdea(idea.id, { dryRun });
       }
@@ -45,9 +45,13 @@ async function main(): Promise<void> {
       console.error("  npx tsx src/index.ts categorize-idea --id <id> --dry-run");
       process.exit(1);
     }
+  } else if (pipeline === "scheduler") {
+    const { startScheduler } = await import("./scheduler.js");
+    startScheduler();
+    // node-cron keeps the event loop alive — process stays running until Ctrl+C
   } else {
     console.error(`Unknown pipeline: "${pipeline}"`);
-    console.error("Available pipelines: categorize-idea");
+    console.error("Available pipelines: categorize-idea, scheduler");
     process.exit(1);
   }
 }

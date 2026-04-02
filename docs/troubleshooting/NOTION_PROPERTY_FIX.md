@@ -151,13 +151,13 @@ Ensure properties are the correct type:
 - **Content**: Should be "Rich text" or "Text"
 
 ## ✨ **Result**
-Your n8n workflow should now work without property errors. The server will:
+The Notion server will now handle property updates without errors. It will:
 - ✅ **Only update properties that exist**
 - ✅ **Handle case variations automatically**
 - ✅ **Provide helpful debug information**
 - ✅ **Continue working even if some properties are missing**
 
 ## 🔗 **Next Steps**
-1. **Test your n8n workflow** again
+1. **Re-run the orchestrator pipeline** to verify the fix
 2. **Use the debug endpoint** if you encounter new property issues
 3. **Check server logs** for helpful diagnostic information 

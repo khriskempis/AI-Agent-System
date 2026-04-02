@@ -1,434 +1,130 @@
-# Director MCP Server Implementation
+# Director MCP Server
 
-## 🎯 Overview
+## Overview
 
-The Director MCP Server has been successfully implemented as a comprehensive workflow orchestration system. This document provides a complete overview of the implementation, architecture, and integration capabilities.
+The Director MCP Server exposes workflow tools over the **MCP stdio protocol** — it has no HTTP server or port. It is used by Claude Desktop (or any MCP client) to load workflow templates and manage workflow context.
 
-## ✅ Implementation Status
+It is **not** involved in the orchestrator's daily pipeline execution. The orchestrator (TypeScript scheduler) runs pipelines directly. The Director MCP Server is used when a human or Claude client needs to author, inspect, or coordinate workflows interactively.
 
-### **COMPLETED: Full Director MCP Server**
+## Components
 
-#### **Core Components Implemented**:
-1. **Template Manager** (`src/templates/template-manager.ts`)
-2. **Context Manager** (`src/context/context-manager.ts`) 
-3. **Agent Communicator** (`src/communication/agent-communicator.ts`)
-4. **HTTP API Server** (`src/index.ts`)
-5. **Type Definitions** (`src/types/workflow.ts`)
-6. **Logging System** (`src/utils/logger.ts`)
+### TemplateManager (`src/templates/template-manager.ts`)
 
-#### **Infrastructure**:
-- ✅ **Package Configuration** with all dependencies
-- ✅ **TypeScript Configuration** with path mapping
-- ✅ **Docker Support** with multi-stage builds
-- ✅ **Comprehensive Documentation** and README
-- ✅ **Startup Scripts** with health checks
+Reads JSON workflow templates from `director-mcp/workflow-templates/` and the registry at `director-mcp/workflow-templates/template-registry.json`.
 
----
+**Key methods:**
 
-## 🏗️ Architecture Implementation
-
-### **Template Processing System**
-
-**Location**: `director-mcp-server/src/templates/template-manager.ts`
-
-**Capabilities**:
-- **Template Loading**: Load 15KB workflow templates from JSON files
-- **Cache Management**: In-memory caching with expiration
-- **Instruction Extraction**: Extract essential 2.5KB focused instructions
-- **Parameter Substitution**: Dynamic variable replacement
-- **Multi-Task Support**: Handle categorization, database updates, content processing
-
-**Key Methods**:
 ```typescript
-// MCP Tool: Load complete workflow template
+// Load a complete workflow template by type name
 async getWorkflowTemplate(workflowType: string): Promise<MCPToolResult>
 
-// Extract and create focused agent instructions
+// Extract focused instructions for a specific agent from a template
 async createAgentInstructions(options: TemplateProcessingOptions): Promise<DirectorToAgentInstruction>
 
-// Internal template processing
-private extractInstructions(template, phase, parameters): ExtractedInstructions
+// Clear cached templates (forces re-read from disk)
+clearCache(): void
+
+// Cache stats — hit rate, cached template count
+getCacheStats(): CacheStats
 ```
 
-### **Context Management System**
+Templates are cached in-memory after first load. `clearCache()` forces a reload — useful during template development.
 
-**Location**: `director-mcp-server/src/context/context-manager.ts`
+### ContextManager (`src/context/context-manager.ts`)
 
-**Capabilities**:
-- **Workflow Context Creation**: Generate unique context IDs
-- **Agent Response Integration**: Process and store agent results
-- **Phase Coordination**: Track workflow progression
-- **Performance Monitoring**: Collect metrics and bottleneck detection
-- **Error Tracking**: Comprehensive error logging with suggested actions
+Maintains shared workflow state across multi-phase interactions. Contexts have a **24-hour TTL** and are cleaned up automatically.
 
-**Key Methods**:
+**Key methods:**
+
 ```typescript
-// Create new workflow context
-createWorkflowContext(workflowId: string): SharedWorkflowContext
+// Create a new workflow context for a run
+createWorkflowContext(workflowId: string, parameters?: Record<string, unknown>): SharedWorkflowContext
 
-// Update context with agent response (core coordination function)
-updateContextWithAgentResponse(contextId: string, agentResponse: AgentToDirectorResponse): MCPToolResult
+// Record an agent's response into the context
+updateContextWithAgentResponse(contextId: string, response: AgentToDirectorResponse): MCPToolResult
 
-// Get context for agent decision making
+// Get context filtered for a specific agent's view
 getContextForAgent(contextId: string, agentId: string): any
+
+// List all active (non-expired) contexts
+listActiveContexts(): SharedWorkflowContext[]
+
+// Stats — active context count, average age
+getStats(): ContextStats
+
+// Shutdown — stops the TTL cleanup interval
+shutdown(): void
 ```
 
-### **Agent Communication System**
+## MCP Tools
 
-**Location**: `director-mcp-server/src/communication/agent-communicator.ts`
+The server exposes these tools over stdio. Connect with:
 
-**Capabilities**:
-- **HTTP Communication**: Send JSON instructions to agents via webhooks
-- **Retry Logic**: Exponential backoff with configurable attempts
-- **Response Validation**: Schema validation for agent responses
-- **Health Monitoring**: Agent availability and status checking
-- **Error Recovery**: Categorized error handling and recovery strategies
-
-**Key Methods**:
-```typescript
-// Send JSON instructions to any agent
-async sendInstructionsToAgent(agentId: string, instructions: DirectorToAgentInstruction): Promise<MCPToolResult>
-
-// Check agent health and availability
-async checkAgentHealth(agentId: string): Promise<MCPToolResult>
-
-// Get agent capabilities (static and dynamic)
-async getAgentCapabilities(agentId: string): Promise<MCPToolResult>
-```
-
----
-
-## 📡 API Implementation
-
-### **MCP Tools (Director Agent Integration)**
-
-#### **Primary MCP Tool: `getWorkflowTemplate`**
-```http
-POST /api/mcp/get-workflow-template
-Content-Type: application/json
-
-{
-  "workflow_type": "idea_categorization",
-  "parameters": { "limit": 5 },
-  "cache_duration": 3600
-}
-```
-
-**Response**: Complete 15KB workflow template with all phases, methodologies, and configurations.
-
-#### **Instruction Creation: `createAgentInstructions`**
-```http
-POST /api/mcp/create-agent-instructions
-Content-Type: application/json
-
-{
-  "workflow_type": "idea_categorization",
-  "target_agent": "notion",
-  "parameters": {
-    "source_database_id": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
-    "projects_database_id": "3cd8ea052d6d4b69956e89b1184cae75"
-  }
-}
-```
-
-**Response**: Focused 2.5KB JSON instructions with extracted methodology and populated parameters.
-
-#### **Full Workflow Execution: `executeWorkflow`**
-```http
-POST /api/mcp/execute-workflow
-Content-Type: application/json
-
-{
-  "workflow_type": "idea_categorization",
-  "target_agent": "notion",
-  "parameters": {
-    "source_database_id": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
-    "limit": 5
-  }
-}
-```
-
-**Response**: Complete workflow execution with context tracking and agent coordination.
-
-### **Agent Communication Endpoints**
-
-#### **Execute Agent Task**
-```http
-POST /api/agents/:agentId/execute
-Content-Type: application/json
-
-[DirectorToAgentInstruction JSON]
-```
-
-#### **Agent Health Monitoring**
-```http
-GET /api/agents/health
-```
-
-**Response**: Health status of all configured agents (notion, planner, validation).
-
-### **Context Management Endpoints**
-
-#### **Get Workflow Context**
-```http
-GET /api/context/:contextId
-```
-
-#### **Get Agent-Specific Context**
-```http
-GET /api/context/:contextId/agent/:agentId
-```
-
-#### **List Active Contexts**
-```http
-GET /api/context
-```
-
----
-
-## 🔄 Workflow Processing Implementation
-
-### **Template-to-Instruction Processing**
-
-**1. Template Loading (15KB → Internal)**
-```typescript
-// Load complete workflow template
-const template = await this.loadTemplate('idea_categorization');
-// Result: Full template with all phases, methodologies, debugging properties
-```
-
-**2. Essential Logic Extraction (15KB → 2.5KB)**
-```typescript
-// Extract only what the agent needs
-const instructions = this.extractInstructions(template, targetPhase, parameters);
-// Result: Focused instructions with categorization methodology, execution requirements
-```
-
-**3. Parameter Population**
-```typescript
-// Replace template variables with runtime values
-const populated = this.populateParameters(templateParams, runtimeParams);
-// Result: {{workflow.context.database_ids.ideas}} → actual database ID
-```
-
-**4. Instruction Composition**
-```typescript
-// Create complete agent instruction
-const instruction: DirectorToAgentInstruction = {
-  agent_id: "notion",
-  task_id: "cat_test_001", 
-  instruction: { task_type: "multi_idea_categorization", ... },
-  categorization_methodology: { multi_idea_parsing_rules: [...], ... },
-  execution_requirements: { required_tools: [...], ... }
-};
-```
-
-### **Context Integration Workflow**
-
-**1. Context Creation**
-```typescript
-const context = this.contextManager.createWorkflowContext(workflowId, parameters);
-// Result: Unique context with performance tracking, error logging
-```
-
-**2. Agent Response Processing**  
-```typescript
-const result = this.contextManager.updateContextWithAgentResponse(contextId, agentResponse);
-// Result: Updated context with phase results, next steps determination
-```
-
-**3. Phase Coordination**
-```typescript
-const nextPhase = this.determineNextPhase(context, agentResponse);
-// Result: Automatic workflow progression or completion
-```
-
----
-
-## 🎯 Integration Points
-
-### **With Existing Systems**
-
-#### **Notion Agent Integration**
-- **Communication**: HTTP webhook to `http://localhost:5678/webhook/notion-agent-execute`
-- **Instruction Format**: JSON parsed by Notion Agent's generic parser
-- **Response Format**: Standardized JSON with results, status, context updates
-
-#### **Template System Integration**
-- **Template Directory**: `director-mcp/workflow-templates/`
-- **Registry**: `template-registry.json` for template discovery
-- **Versioning**: Template versioning and cache invalidation
-
-#### **Database Integration**
-- **Notion Databases**: Projects, Knowledge Archive, Journal routing
-- **Dynamic IDs**: Runtime database ID substitution
-- **Schema Awareness**: Database schema loading and validation
-
-### **Agent Capability System**
-
-**Current Agents Configured**:
-```typescript
-// Notion Agent
-{
-  agent_id: 'notion',
-  primary_functions: ['database_operations', 'content_analysis', 'multi_idea_parsing'],
-  supported_task_types: ['multi_idea_categorization', 'database_page_updates'],
-  tools: ['get_ideas', 'get_idea_by_id', 'search_ideas', 'update_idea']
-}
-
-// Planner Agent (configured for future use)
-{
-  agent_id: 'planner',
-  primary_functions: ['strategic_planning', 'task_decomposition'],
-  supported_task_types: ['project_planning', 'task_breakdown']
-}
-
-// Validation Agent (configured for future use)
-{
-  agent_id: 'validation', 
-  primary_functions: ['quality_assurance', 'consistency_checking'],
-  supported_task_types: ['result_validation', 'consistency_check']
-}
-```
-
----
-
-## 📊 Performance Implementation
-
-### **Efficiency Optimizations**
-
-#### **Template Processing**
-- **Cache Hit Rate**: Templates cached in-memory after first load
-- **Size Reduction**: 83% reduction from 15KB templates to 2.5KB instructions
-- **Processing Time**: Sub-millisecond template access from cache
-
-#### **Agent Communication**
-- **Retry Logic**: Exponential backoff (1s, 2s, 4s, max 10s)
-- **Timeout Management**: Configurable per-agent timeouts (default 3 minutes)
-- **Connection Pooling**: HTTP keep-alive for agent communication
-
-#### **Context Management**
-- **Memory Efficiency**: Lightweight context objects (~400 bytes)
-- **Cleanup Strategy**: Automatic cleanup of contexts older than 24 hours
-- **Performance Tracking**: Real-time metrics collection
-
-### **Monitoring Implementation**
-
-#### **Structured Logging**
-```typescript
-logger.info('Agent instructions created successfully', {
-  task_id: instruction.task_id,
-  instruction_size: JSON.stringify(instruction).length,
-  methodology_sections: Object.keys(extractedInstructions.methodology_sections)
-});
-```
-
-#### **Performance Metrics**
-- **Execution Time Tracking**: Per-agent response time monitoring
-- **Token Usage Estimation**: Approximate token cost tracking
-- **Bottleneck Detection**: Automatic identification of slow operations
-- **Error Categorization**: Systematic error classification and tracking
-
----
-
-## 🚀 Deployment Implementation
-
-### **Docker Support**
-```dockerfile
-# Multi-stage build with TypeScript compilation
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY src/ ./src/
-RUN npm run build
-```
-
-### **Startup Script**
 ```bash
-# Comprehensive startup with health checks
-./scripts/start-director-mcp.sh
-
-# Features:
-# - Dependency installation
-# - TypeScript compilation  
-# - Port availability checking
-# - Health endpoint testing
-# - Graceful shutdown handling
+npx @modelcontextprotocol/inspector stdio "node director-mcp-server/dist/index.js"
 ```
 
-### **Health Monitoring**
-```http
-GET /health
-# Response:
+### Workflow Template Tools
+
+| Tool | Description |
+|---|---|
+| `get_workflow_template` | Load a complete workflow template by type (e.g. `idea-categorization-v1`) |
+| `create_agent_instructions` | Extract focused instructions from a template for a specific agent |
+
+### Context Management Tools
+
+| Tool | Description |
+|---|---|
+| `create_workflow_context` | Create a new workflow context |
+| `get_workflow_context` | Retrieve context by ID |
+| `update_context_with_agent_response` | Record an agent response into context |
+| `get_context_for_agent` | Get the context slice relevant to a specific agent |
+| `list_active_contexts` | List all active (non-expired) contexts |
+
+### System Tools
+
+| Tool | Description |
+|---|---|
+| `get_system_stats` | Server uptime, memory, template cache stats, context manager stats |
+| `clear_template_cache` | Force TemplateManager to re-read templates from disk |
+
+## Template Format
+
+Templates live in `director-mcp/workflow-templates/` and are registered in `template-registry.json`:
+
+```json
 {
-  "status": "healthy",
-  "services": {
-    "template_manager": "active",
-    "context_manager": "active", 
-    "agent_communicator": "active"
+  "templates": {
+    "idea-categorization-v1": "idea-categorization-v1.json",
+    "database-item-creation-v1": "database-item-creation-v1.json"
   }
 }
 ```
 
----
+Each template JSON describes the workflow phases, methodology, categorization rules, and execution requirements. `TemplateManager.createAgentInstructions()` extracts only the relevant phase's logic (reducing a 15KB template to ~2.5KB focused instructions).
 
-## 🔧 Configuration Implementation
+See [Workflow Templates](./WORKFLOW_TEMPLATES.md) for how to add or modify templates.
 
-### **Environment Variables**
+## Docker Setup
+
+The director MCP server runs as a stdio container — no port exposure needed.
+
+```yaml
+# docker-compose.yml
+director-mcp-server:
+  volumes:
+    - ./director-mcp:/app/director-mcp:ro  # templates + registry
+    - ./docs:/app/docs:ro
+  # No ports — communicates via stdio
+```
+
+Logs go to the `director_logs` Docker volume.
+
+## Environment Variables
+
 ```bash
-PORT=3002                    # Server port
-LOG_LEVEL=info              # Logging detail level
-NODE_ENV=development        # Environment mode
-CORS_ORIGIN=*               # Cross-origin access
+NODE_ENV=production     # or development
+LOG_LEVEL=info          # debug | info | warn | error
 ```
 
-### **Agent Endpoint Configuration**
-```typescript
-// Configurable agent endpoints with retry and timeout settings
-private agentEndpoints: Map<string, AgentEndpoint> = new Map([
-  ['notion', {
-    base_url: 'http://localhost:5678',
-    endpoints: { execute: '/webhook/notion-agent-execute' },
-    timeout_ms: 180000,
-    retry_attempts: 2
-  }]
-]);
-```
-
----
-
-## 🎯 Implementation Results
-
-### **✅ Achieved Goals**
-
-1. **Template System**: ✅ Complete workflow template loading and processing
-2. **JSON Communication**: ✅ Efficient 83% size reduction for agent instructions  
-3. **Context Management**: ✅ Shared workflow state across all phases
-4. **Agent Coordination**: ✅ HTTP communication with retry and error handling
-5. **MCP Integration**: ✅ Full MCP tool implementation for Director Agent
-6. **Performance**: ✅ Caching, monitoring, and optimization systems
-7. **Documentation**: ✅ Comprehensive guides and API documentation
-
-### **🎯 Ready for Integration**
-
-The Director MCP Server is **production-ready** and provides:
-
-- **Template Loading**: `getWorkflowTemplate(workflow_type)` MCP tool
-- **Instruction Creation**: Extract essential logic from 15KB templates  
-- **Agent Communication**: Send 2.5KB focused JSON instructions
-- **Context Tracking**: Maintain state across workflow phases
-- **Error Recovery**: Robust error handling and retry mechanisms
-- **Performance Monitoring**: Real-time metrics and bottleneck detection
-
-### **🚀 Next Steps**
-
-1. **Start Server**: `./scripts/start-director-mcp.sh`
-2. **Test Template Loading**: Verify idea_categorization template access
-3. **Test Agent Communication**: Send instructions to Notion Agent
-4. **End-to-End Workflow**: Execute complete categorization workflow
-5. **Add New Templates**: Implement additional workflow types
-
----
-
-**The Director MCP Server provides the complete foundation for intelligent multi-agent workflow orchestration with template-driven instruction creation and comprehensive context management!** 🎯
+No API keys or service URLs required — the director MCP server only reads local template files and manages in-memory context state.

@@ -19,7 +19,7 @@ export async function ask(
 ): Promise<string> {
   const response = await client.messages.create({
     model,
-    max_tokens: 1024,
+    max_tokens: 4096,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
   });
@@ -31,15 +31,26 @@ export async function ask(
   return block.text;
 }
 
+function extractFirstJSON(text: string): string {
+  const start = text.indexOf("{");
+  if (start === -1) throw new Error("No JSON object found in response");
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  throw new Error("Unclosed JSON object in response");
+}
+
 export async function askJSON<T>(
   model: ClaudeModel,
   systemPrompt: string,
   userMessage: string
 ): Promise<T> {
   const raw = await ask(model, systemPrompt, userMessage);
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error(`No JSON object found in response: ${raw}`);
-  }
-  return JSON.parse(match[0]) as T;
+  const json = extractFirstJSON(raw);
+  return JSON.parse(json) as T;
 }
