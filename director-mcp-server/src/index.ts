@@ -44,11 +44,11 @@ const env = envSchema.parse(process.env);
 
 // Initialize shared services
 console.error('Initializing Director MCP Server components...');
-let templateManager, contextManager, agentCommunicator;
+let templateManager, contextManager;
 
 try {
   const services = initializeSharedServices();
-  ({ templateManager, contextManager, agentCommunicator } = services);
+  ({ templateManager, contextManager } = services);
   console.error('✅ All components initialized');
 } catch (error) {
   console.error('❌ Component initialization failed:', error);
@@ -125,91 +125,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['workflow_type', 'target_agent'],
         },
       },
-      {
-        name: 'execute_workflow',
-        description: 'Full workflow execution - create instructions and send to agent',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            workflow_type: {
-              type: 'string',
-              description: 'The workflow template type to execute',
-            },
-            target_agent: {
-              type: 'string',
-              description: 'The agent to execute the workflow',
-            },
-            parameters: {
-              type: 'object',
-              description: 'Workflow parameters and data',
-              additionalProperties: true,
-            },
-          },
-          required: ['workflow_type', 'target_agent'],
-        },
-      },
 
       // ====================================================================
-      // AGENT COMMUNICATION TOOLS
-      // ====================================================================
-      {
-        name: 'send_agent_instructions',
-        description: 'Send structured instructions to a specific agent',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            agent_id: {
-              type: 'string',
-              description: 'Target agent ID',
-            },
-            instructions: {
-              type: 'object',
-              description: 'Complete DirectorToAgentInstruction object',
-              additionalProperties: true,
-            },
-          },
-          required: ['agent_id', 'instructions'],
-        },
-      },
-      {
-        name: 'check_agent_health',
-        description: 'Check the health status of a specific agent',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            agent_id: {
-              type: 'string',
-              description: 'Agent ID to check (notion, planner, validation)',
-            },
-          },
-          required: ['agent_id'],
-        },
-      },
-      {
-        name: 'check_all_agents_health',
-        description: 'Check health status of all configured agents',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'get_agent_capabilities',
-        description: 'Get capabilities and specifications for an agent',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            agent_id: {
-              type: 'string',
-              description: 'Agent ID to get capabilities for',
-            },
-          },
-          required: ['agent_id'],
-        },
-      },
-
-      // ====================================================================
-      // CONTEXT MANAGEMENT TOOLS  
+      // CONTEXT MANAGEMENT TOOLS
       // ====================================================================
       {
         name: 'create_workflow_context',
@@ -382,135 +300,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case 'execute_workflow': {
-        const workflow_type = args?.workflow_type as string;
-        const target_agent = args?.target_agent as string;
-        const parameters = args?.parameters as Record<string, any> || {};
-
-        if (!workflow_type) {
-          throw new McpError(ErrorCode.InvalidParams, 'workflow_type parameter is required');
-        }
-        if (!target_agent) {
-          throw new McpError(ErrorCode.InvalidParams, 'target_agent parameter is required');
-        }
-
-        // Create workflow context
-        const context = contextManager.createWorkflowContext(workflow_type, parameters);
-
-        // Create agent instructions
-        const instructions = await templateManager.createAgentInstructions({
-          workflow_type,
-          parameters: { ...parameters, context_id: context.context_id },
-          target_agent
-        });
-
-        // Send instructions to agent
-        const agentResult = await agentCommunicator.sendInstructionsToAgent(target_agent, instructions);
-
-        if (agentResult.success) {
-          // Update context with agent response
-          const contextUpdate = contextManager.updateContextWithAgentResponse(
-            context.context_id,
-            agentResult.data
-          );
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-            success: true,
-            data: {
-              context_id: context.context_id,
-              agent_response: agentResult.data,
-              context_update: contextUpdate.data,
-              workflow_complete: contextUpdate.data?.workflow_complete || false
-            }
-                }, null, 2),
-              },
-            ],
-          };
-        } else {
-          throw new McpError(ErrorCode.InternalError, `Workflow execution failed: ${agentResult.error}`);
-        }
-      }
-
-      // =====================================================================
-      // AGENT COMMUNICATION TOOLS
-      // =====================================================================
-      case 'send_agent_instructions': {
-        const agent_id = args?.agent_id as string;
-        const instructions = args?.instructions as any;
-
-        if (!agent_id) {
-          throw new McpError(ErrorCode.InvalidParams, 'agent_id parameter is required');
-        }
-        if (!instructions) {
-          throw new McpError(ErrorCode.InvalidParams, 'instructions parameter is required');
-        }
-
-        const result = await agentCommunicator.sendInstructionsToAgent(agent_id, instructions);
-        
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'check_agent_health': {
-        const agent_id = args?.agent_id as string;
-        
-        if (!agent_id) {
-          throw new McpError(ErrorCode.InvalidParams, 'agent_id parameter is required');
-        }
-
-        const result = await agentCommunicator.checkAgentHealth(agent_id);
-        
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'check_all_agents_health': {
-        const result = await agentCommunicator.checkAllAgentsHealth();
-        
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'get_agent_capabilities': {
-        const agent_id = args?.agent_id as string;
-        
-        if (!agent_id) {
-          throw new McpError(ErrorCode.InvalidParams, 'agent_id parameter is required');
-        }
-
-        const result = await agentCommunicator.getAgentCapabilities(agent_id);
-        
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
 
       // =====================================================================
       // CONTEXT MANAGEMENT TOOLS

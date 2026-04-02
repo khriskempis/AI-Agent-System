@@ -1,7 +1,8 @@
 import { getIdea, updateIdea, type NotionIdea } from "../notion-client.js";
 import { parseIdeas } from "../parser.js";
-import { classifyIdeas, evaluateQA, type ClassifyResult } from "../agents/director.js";
+import { classifyIdeas, evaluateQA, type ClassifyResult, type RoutingDestination } from "../agents/director.js";
 import { validateClassification } from "../agents/validator.js";
+import { NotionAgent } from "../agents/notion-agent.js";
 import { logger } from "../logger.js";
 import { withRetry } from "../workflow.js";
 import {
@@ -139,6 +140,12 @@ export async function categorizeIdea(
   }
 }
 
+const DESTINATION_DB: Record<RoutingDestination, string | undefined> = {
+  projects: process.env.NOTION_PROJECTS_DATABASE_ID,
+  knowledge: process.env.NOTION_KNOWLEDGE_DATABASE_ID,
+  journal: process.env.NOTION_JOURNAL_DATABASE_ID,
+};
+
 async function writeResult(
   idea: NotionIdea,
   classifyResult: ClassifyResult | null,
@@ -155,24 +162,51 @@ async function writeResult(
     return;
   }
 
-  logger.stage("WRITE", "Writing tags + idea count to Notion");
+  logger.stage("WRITE", `Routing ${classifyResult.length} idea(s) to destination tables`);
 
+  const notionAgent = new NotionAgent();
+
+  // Route each classified idea to its destination database
+  for (const classification of classifyResult) {
+    const dbId = DESTINATION_DB[classification.destination];
+    if (!dbId) {
+      logger.warn(`No database ID configured for destination "${classification.destination}" — skipping idea: "${classification.text.slice(0, 60)}"`);
+      continue;
+    }
+
+    const content = classification.text;
+
+    if (options.dryRun) {
+      logger.info(`[dry-run] Would create page in ${classification.destination} (${dbId.slice(0, 8)}...): "${classification.text.slice(0, 60)}"`);
+      logger.json("classification", { destination: classification.destination, tags: classification.tags, reasoning: classification.reasoning });
+      continue;
+    }
+
+    try {
+      const created = await notionAgent.createPage(dbId, classification.text, content, classification.tags);
+      logger.success(`Created in ${classification.destination}: "${classification.text.slice(0, 60)}" → ${created.url}`);
+    } catch (err) {
+      logger.warn(`Failed to create page in ${classification.destination}: ${String(err)}`);
+    }
+  }
+
+  // Collect all tags from across all classifications and merge with existing
+  const allNewTags = [...new Set(classifyResult.flatMap((c) => c.tags))];
   const existingTags = new Set(idea.tags);
-  const newTags = classifyResult.tags.filter((t) => !existingTags.has(t));
-  const mergedTags = [...idea.tags, ...newTags];
+  const mergedTags = [...idea.tags, ...allNewTags.filter((t) => !existingTags.has(t))];
 
-  const payload = {
+  const sourcePayload = {
     tags: mergedTags,
     howManyIdeas: ideaCount,
-    status: "In Progress" as const,
+    status: "Done" as const,
   };
 
   if (options.dryRun) {
-    logger.info("[dry-run] Would write:");
-    logger.json("payload", payload);
+    logger.info("[dry-run] Would update source idea:");
+    logger.json("sourcePayload", sourcePayload);
     return;
   }
 
-  await updateIdea(idea.id, payload);
-  logger.success(`Updated: tags=${mergedTags.join(", ")}, howManyIdeas=${ideaCount}`);
+  await updateIdea(idea.id, sourcePayload);
+  logger.success(`Source idea marked Done: tags=${mergedTags.join(", ")}, howManyIdeas=${ideaCount}`);
 }

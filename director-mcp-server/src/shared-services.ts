@@ -1,17 +1,15 @@
 /**
  * Shared Services for Director MCP Server
- * Centralized service instances used by both MCP and HTTP servers
+ * Centralized service instances used by the MCP server
  */
 
 import { TemplateManager } from './templates/template-manager.js';
 import { ContextManager } from './context/context-manager.js';
-import { AgentCommunicator } from './communication/agent-communicator.js';
 import { logger } from './utils/logger.js';
 
-// Shared service instances - initialized once and used by both servers
+// Shared service instances - initialized once
 let templateManager: TemplateManager | null = null;
 let contextManager: ContextManager | null = null;
-let agentCommunicator: AgentCommunicator | null = null;
 
 /**
  * Initialize all shared services
@@ -19,10 +17,9 @@ let agentCommunicator: AgentCommunicator | null = null;
 export function initializeSharedServices(): {
   templateManager: TemplateManager;
   contextManager: ContextManager;
-  agentCommunicator: AgentCommunicator;
 } {
-  if (templateManager && contextManager && agentCommunicator) {
-    return { templateManager, contextManager, agentCommunicator };
+  if (templateManager && contextManager) {
+    return { templateManager, contextManager };
   }
 
   logger.info('Initializing shared Director services...');
@@ -30,11 +27,10 @@ export function initializeSharedServices(): {
   try {
     templateManager = new TemplateManager();
     contextManager = new ContextManager();
-    agentCommunicator = new AgentCommunicator();
 
     logger.info('✅ All shared services initialized successfully');
 
-    return { templateManager, contextManager, agentCommunicator };
+    return { templateManager, contextManager };
   } catch (error) {
     logger.error('❌ Failed to initialize shared services', {
       error: error instanceof Error ? error.message : 'Unknown error'
@@ -49,13 +45,12 @@ export function initializeSharedServices(): {
 export function getSharedServices(): {
   templateManager: TemplateManager;
   contextManager: ContextManager;
-  agentCommunicator: AgentCommunicator;
 } {
-  if (!templateManager || !contextManager || !agentCommunicator) {
+  if (!templateManager || !contextManager) {
     throw new Error('Shared services not initialized. Call initializeSharedServices() first.');
   }
 
-  return { templateManager, contextManager, agentCommunicator };
+  return { templateManager, contextManager };
 }
 
 /**
@@ -65,11 +60,10 @@ export function cleanupSharedServices(): void {
   if (contextManager) {
     contextManager.shutdown();
   }
-  
+
   templateManager = null;
   contextManager = null;
-  agentCommunicator = null;
-  
+
   logger.info('Shared services cleaned up');
 }
 
@@ -78,7 +72,7 @@ export function cleanupSharedServices(): void {
  */
 export function getSystemStats() {
   const services = getSharedServices();
-  
+
   return {
     server: {
       uptime: process.uptime(),
@@ -87,7 +81,6 @@ export function getSystemStats() {
       version: '1.0.0'
     },
     template_manager: services.templateManager.getCacheStats(),
-    context_manager: services.contextManager.getStats(),
-    agent_communicator: services.agentCommunicator.getAgentStats()
+    context_manager: services.contextManager.getStats()
   };
 }
