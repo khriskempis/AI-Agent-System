@@ -1,100 +1,122 @@
-# MCP Server Testing Suite
+# Testing
 
-Organized testing infrastructure for the MCP Server project components.
+## Quick Health Check
 
-## 📁 Directory Structure
-
-```
-testing/
-├── 📊 database-testing/          # Database endpoint testing
-│   ├── test-database-endpoints.ts    # TypeScript database tests
-│   ├── test_database_creation.py     # Python database tests (legacy)
-│   ├── DATABASE_ENDPOINT_TESTING.md  # Database testing docs
-│   └── ENDPOINT_TESTING_GUIDE.md     # Endpoint testing guide
-├── 🎯 director-testing/          # Director MCP server testing
-│   └── test-director-endpoints.sh    # Director endpoint tests
-├── 📮 postman-collections/       # Postman test collections
-│   ├── Director-MCP-Server-Postman-Collection.json
-│   └── Director-MCP-Server-Tests.postman_collection.json
-├── 📄 example-data/              # Sample JSON data for testing
-│   ├── project_item_example.json
-│   ├── knowledge_item_example.json
-│   └── journal_item_example.json
-├── 🔧 scripts/                   # Shell scripts and utilities
-│   ├── quick-test.sh                 # Quick system health check
-│   ├── quick-database-test.sh        # Quick database test
-│   └── test-database-endpoints.sh    # Database endpoint script
-├── 📚 docs/                      # Documentation
-│   └── TESTING_GUIDE.md              # Comprehensive testing guide
-├── package.json                  # Node.js dependencies and scripts
-└── README.md                     # This file
-```
-
-## 🚀 Quick Start
-
-### Database Testing (Recommended)
 ```bash
-# Run comprehensive database tests with rich content
-npm run test:database
-
-# Quick database connectivity test
-npm run test:database:quick
+# Verify all services are up and orchestrator can run
+./scripts/sync-agent-configs.sh
 ```
 
-### Director Testing
+## Testing the Notion HTTP API
+
+The Notion server exposes a REST API on port 3001. Start it first:
+
 ```bash
-# Test Director MCP server endpoints
-npm run test:director
+docker-compose up -d notion-idea-server-http
+# or dev mode with hot reload:
+docker-compose --profile dev up -d notion-idea-server-http-dev
 ```
 
-### System Health Check
+Then test with curl:
+
 ```bash
-# Quick test of all systems
-npm run quick-test
+# Health
+curl http://localhost:3001/health
+
+# List unprocessed ideas
+curl "http://localhost:3001/api/ideas?status=Not%20Started"
+
+# Get a single idea
+curl http://localhost:3001/api/ideas/<notion-page-id>
+
+# Get idea content (raw blocks)
+curl http://localhost:3001/api/ideas/<notion-page-id>/content
+
+# Update idea status
+curl -X PUT http://localhost:3001/api/ideas/<notion-page-id> \
+  -H "Content-Type: application/json" \
+  -d '{"status": "In Progress"}'
+
+# Summary counts by status
+curl http://localhost:3001/api/ideas/summary
 ```
 
-### All Tests
+See [API Endpoints](../docs/setup/API_ENDPOINTS.md) for the full reference.
+
+## Testing the Orchestrator
+
+### Dry-run a single idea (no writes to Notion)
+
 ```bash
-# Run all available tests
-npm run test:all
+cd orchestrator
+npx tsx src/index.ts categorize-idea --id <notion-page-id> --dry-run
 ```
 
-## 🎯 Phase 2 Workflow Testing
+### Process a single idea end-to-end
 
-For testing the **n8n Phase 2 workflow** (database item creation):
+```bash
+cd orchestrator
+npx tsx src/index.ts categorize-idea --id <notion-page-id>
+```
 
-1. **Validate database endpoints** (already done ✅):
-   ```bash
-   npm run test:database
-   ```
+### Process all unprocessed ideas once
 
-2. **Import n8n workflow**:
-   - File: `../n8n/workflows/director-notion-phase2-workflow.json`
-   - Or: `../n8n/workflows/director-notion-complete-workflow.json`
+```bash
+cd orchestrator
+npx tsx src/index.ts categorize-idea --all
+```
 
-3. **Test workflow execution** in n8n interface
+### Start the full scheduler (fires at 09:00 ET)
 
-## 📊 Database Configuration
+```bash
+cd orchestrator
+npm start
+```
 
-Current validated database IDs:
-- **Projects**: `3cd8ea052d6d4b69956e89b1184cae75` ✅
-- **Knowledge**: `263d7be3dbcd80c0b6e4fd309a8af453` ✅  
-- **Journal**: `a1d35f6081a044589425512cb9d136b7` ✅
+## Inspecting MySQL Audit Log
 
-## 🔧 Dependencies
+```bash
+docker exec -it orchestrator-mysql mysql -u orchestrator -porchestrator orchestrator
 
-- **Node.js**: TypeScript testing infrastructure
-- **tsx**: TypeScript execution
-- **axios**: HTTP client for API testing
-- **curl**: Command-line HTTP testing
-- **jq**: JSON processing (optional, for pretty output)
+-- Recent runs
+SELECT notion_page_name, status, current_stage, attempts, started_at
+FROM workflow_runs
+ORDER BY started_at DESC
+LIMIT 20;
 
-## 📚 Documentation
+-- Events for a specific run (full stage trace)
+SELECT stage, status, attempt, duration_ms, error_message
+FROM workflow_events
+WHERE run_id = '<run-id>'
+ORDER BY id;
 
-- **Database Testing**: `database-testing/DATABASE_ENDPOINT_TESTING.md`
-- **Comprehensive Guide**: `docs/TESTING_GUIDE.md`
-- **Endpoint Guide**: `database-testing/ENDPOINT_TESTING_GUIDE.md`
+-- Ideas that landed in "Needs Review" (failed QA loop)
+SELECT notion_page_name, attempts, updated_at
+FROM workflow_runs
+WHERE status = 'needs_review';
 
----
+-- Average duration per pipeline stage
+SELECT stage, AVG(duration_ms) AS avg_ms, COUNT(*) AS count
+FROM workflow_events
+WHERE status = 'completed'
+GROUP BY stage
+ORDER BY avg_ms DESC;
+```
 
-**Ready to test Phase 2 database creation workflow!** 🎯
+## Testing the Director MCP Server
+
+The director server communicates over stdio. Use the MCP inspector:
+
+```bash
+npx @modelcontextprotocol/inspector stdio "node director-mcp-server/dist/index.js"
+```
+
+Available tools to test: `get_workflow_template`, `create_agent_instructions`, `create_workflow_context`, `get_system_stats`.
+
+## Test Data
+
+Sample Notion page IDs and database IDs are in `example-data/`. These reference real Notion resources — make sure your `.env` has a valid API token before running against them.
+
+## Postman Collections
+
+Pre-built collections for the Notion HTTP API are in `postman-collections/`. Import into Postman and set the `base_url` variable to `http://localhost:3001`.

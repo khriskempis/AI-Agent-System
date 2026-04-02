@@ -1,178 +1,68 @@
-# Testing vs Production Environment Configuration
+# Testing vs Production Environment
 
-## Overview
-This document tracks the differences between our current testing setup and what will be required for production deployment.
+## Environment Differences
 
-## Current Testing Environment
+| Config | Local Dev | Docker Production |
+|---|---|---|
+| `NOTION_API_URL` | `http://localhost:3001` | `http://notion-idea-server-http:3001` |
+| `MYSQL_HOST` | `localhost` (or unset — history disabled) | `mysql` |
+| `MYSQL_PORT` | `3306` | `3306` |
+| `ANTHROPIC_API_KEY` | In `orchestrator/.env` | In `orchestrator/.env` (mounted) |
+| `NODE_ENV` | `development` | `production` |
 
-### Director MCP Server
-- **Current State**: Running in **pure MCP mode** (stdio) via Docker dev container
-- **Missing**: HTTP wrapper endpoints (`/api/mcp/update-context`, `/api/mcp/create-agent-instructions`)
-- **Workaround**: n8n workflow bypasses Director HTTP calls with local data processing
+## Local Development
 
-### Notion Server  
-- **Current State**: ✅ Running HTTP wrapper mode on port 3001
-- **Status**: Production-ready configuration
+Run the Notion HTTP API in Docker, everything else locally:
 
-### Database Configuration
-- **Current State**: Using real Notion database IDs (validated ✅)
-- **Status**: Production-ready
+```bash
+# Start only the Notion API
+docker-compose --profile dev up -d notion-idea-server-http-dev
 
-## Required Changes for Production
+# Run the orchestrator locally against it
+cd orchestrator
+NOTION_API_URL=http://localhost:3001 npx tsx src/index.ts categorize-idea --id <id>
+```
 
-### 1. Director MCP Server HTTP Mode
-**Current Issue**: Director container runs `npm run dev` → `tsx src/index.ts` (pure MCP)
-**Production Need**: Must run HTTP wrapper → `tsx src/http-wrapper.ts`
+MySQL is optional locally. Without it, `workflow_runs` and `workflow_events` are silently skipped — the pipeline still processes ideas, you just lose the audit log.
 
-#### Required Changes:
+## Docker Production
+
+All services run in the `mcp-servers-network` Docker network. The orchestrator reaches the Notion server by container name:
+
 ```yaml
-# docker-compose.yml - Director service needs:
-command: ["node", "dist/http-wrapper.js"]  # Instead of npm run dev
-ports:
-  - "3002:3002"  # Expose HTTP port
+environment:
+  - NOTION_API_URL=http://notion-idea-server-http:3001
+  - MYSQL_HOST=mysql
 ```
 
-#### Missing Endpoints to Implement:
-- ✅ `/api/mcp/create-agent-instructions` (exists but needs template)
-- ❌ `/api/mcp/update-context` (implemented but not accessible)
-- ❌ Template: `database_item_creation` (needs to be created)
+The orchestrator container waits for MySQL to pass its healthcheck before starting (`depends_on: mysql: condition: service_healthy`).
 
-### 2. n8n Workflow Modifications
-**Current Workarounds** (that need to be reverted for production):
+## Verifying Before Running
 
-#### A. Context Logging Node
-```json
-// TESTING: Bypassed with Set node
-{
-  "name": "Director: Log Phase 1 Context (Skipped)",
-  "type": "n8n-nodes-base.set"
-}
-
-// PRODUCTION: Should be HTTP request
-{
-  "name": "Director: Log Phase 1 Context", 
-  "type": "n8n-nodes-base.httpRequest",
-  "url": "http://host.docker.internal:3002/api/mcp/update-context"
-}
+```bash
+# Check all required services are reachable
+./scripts/sync-agent-configs.sh
 ```
 
-#### B. Phase 2 Instructions Node
-```json
-// TESTING: Local data preparation
-{
-  "name": "Prepare Phase 2 Instructions",
-  "type": "n8n-nodes-base.set"
-}
+This script checks `NOTION_API_URL` reachability and `ANTHROPIC_API_KEY` presence, and reports whether MySQL is available.
 
-// PRODUCTION: Should be HTTP request to Director
-{
-  "name": "Director: Create Phase 2 Instructions",
-  "type": "n8n-nodes-base.httpRequest", 
-  "url": "http://host.docker.internal:3002/api/mcp/create-agent-instructions"
-}
+## Production Deployment Checklist
+
+1. `notion-idea-server/.env` — Notion API token + database IDs set
+2. `orchestrator/.env` — `ANTHROPIC_API_KEY` set
+3. Docker network exists: `docker network create mcp-servers-network`
+4. Start stack: `./scripts/start-full-project.sh`
+5. Verify: `./scripts/sync-agent-configs.sh`
+6. Check logs: `docker-compose logs -f orchestrator`
+
+## Inspecting Production State
+
+```bash
+# Recent workflow runs
+docker exec -it orchestrator-mysql mysql -u orchestrator -porchestrator orchestrator \
+  -e "SELECT notion_page_name, status, current_stage, started_at FROM workflow_runs ORDER BY started_at DESC LIMIT 10;"
+
+# Ideas currently in "Needs Review" (failed QA loop)
+docker exec -it orchestrator-mysql mysql -u orchestrator -porchestrator orchestrator \
+  -e "SELECT notion_page_name, attempts, updated_at FROM workflow_runs WHERE status = 'needs_review';"
 ```
-
-#### C. Final Context Update Node
-```json
-// TESTING: Simple success message
-{
-  "name": "Workflow Complete ✅",
-  "type": "n8n-nodes-base.set"
-}
-
-// PRODUCTION: Should be HTTP request
-{
-  "name": "Director: Final Context Update",
-  "type": "n8n-nodes-base.httpRequest",
-  "url": "http://host.docker.internal:3002/api/mcp/update-context"
-}
-```
-
-### 3. Director MCP Server Templates
-**Missing Template**: `database_item_creation`
-
-#### Required File:
-```
-director-mcp/workflow-templates/database-item-creation-v1.json
-```
-
-#### Template Registry Update:
-```json
-// director-mcp/workflow-templates/template-registry.json
-{
-  "templates": {
-    "idea_categorization": "idea-categorization-v1.json",
-    "database_item_creation": "database-item-creation-v1.json"  // ADD THIS
-  }
-}
-```
-
-### 4. Docker Configuration
-**Current**: Development containers with source mounting
-**Production**: Built production containers
-
-#### Required Changes:
-```yaml
-# Use production services instead of dev services
-services:
-  director-mcp-server:      # Instead of director-mcp-server-dev
-    command: ["node", "dist/http-wrapper.js"]
-    ports: ["3002:3002"]
-    
-  notion-idea-server-http:  # Instead of notion-idea-server-http-dev  
-    # Already configured correctly
-```
-
-## Testing Environment Advantages
-
-### What Works Well in Testing:
-1. **Direct database endpoint testing** ✅
-2. **Rich content creation** ✅  
-3. **Database schema validation** ✅
-4. **n8n workflow structure** ✅
-5. **Notion Agent functionality** ✅
-
-### What's Bypassed in Testing:
-1. **Director HTTP endpoints** (using local data)
-2. **Context management** (skipped)
-3. **Template system** (hardcoded instructions)
-4. **Agent communication protocol** (simplified)
-
-## Migration Path to Production
-
-### Phase 1: Fix Director HTTP Mode
-1. Update Docker configuration to run HTTP wrapper
-2. Expose port 3002
-3. Test Director endpoints directly
-
-### Phase 2: Create Missing Template  
-1. Create `database-item-creation-v1.json`
-2. Update template registry
-3. Test template generation
-
-### Phase 3: Restore Full Workflow
-1. Revert n8n workflow to use HTTP requests
-2. Test end-to-end Director communication
-3. Validate context management
-
-### Phase 4: Production Deployment
-1. Switch to production Docker services
-2. Update environment variables
-3. Test complete system integration
-
-## Current Status
-- ✅ **Database Creation**: Production-ready
-- ✅ **Notion Integration**: Production-ready  
-- ❌ **Director HTTP Mode**: Testing workaround
-- ❌ **Context Management**: Testing bypass
-- ❌ **Template System**: Incomplete
-
-## Next Steps for Production Readiness
-1. Fix Director MCP Server HTTP mode
-2. Create database creation template
-3. Test Director endpoints
-4. Restore full n8n workflow
-5. End-to-end production testing
-
----
-**Note**: Current testing validates core functionality (database creation) but uses simplified Director integration. Production requires full Director MCP protocol implementation.

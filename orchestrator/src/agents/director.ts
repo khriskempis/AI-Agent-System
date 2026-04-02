@@ -4,10 +4,24 @@ import type { ParsedIdea } from "../parser.js";
 const ALLOWED_TAGS = ["Blog", "Project Idea", "Thought", "Mix of Ideas"] as const;
 export type IdeaTag = (typeof ALLOWED_TAGS)[number];
 
-export interface ClassifyResult {
+export type RoutingDestination = "projects" | "journal" | "knowledge";
+
+export interface IdeaClassification {
+  text: string;
+  shortTitle: string;
+  description: string;
+  destination: RoutingDestination;
   tags: IdeaTag[];
   reasoning: string;
   confidence: number;
+}
+
+export type ClassifyResult = IdeaClassification[];
+
+export interface DestinationTagOptions {
+  projects: string[];
+  journal: string[];
+  knowledge: string[];
 }
 
 export interface EvaluateResult {
@@ -15,22 +29,32 @@ export interface EvaluateResult {
   reason: string;
 }
 
-const CLASSIFY_SYSTEM = `You are an idea classifier. Given a list of ideas, return a JSON object with:
-- "tags": array of tags from ONLY this allowed set: ["Blog", "Project Idea", "Thought", "Mix of Ideas"]
-  - Use "Mix of Ideas" if the ideas span multiple types
-  - Use a single tag if all ideas clearly belong to one type
-- "reasoning": one sentence explaining your classification
+function buildClassifySystem(tagOptions: DestinationTagOptions): string {
+  return `You are an idea classifier and router. Given a list of ideas, return a JSON object with an "ideas" array where each item corresponds to one input idea and contains:
+- "text": the original idea text (copy exactly)
+- "shortTitle": a concise title of 3-8 words summarizing the idea
+- "description": one or two sentences describing the idea and its value
+- "destination": one of "projects", "journal", or "knowledge"
+  - "projects": actionable tasks, things to build, implement, or execute
+  - "journal": personal thoughts, reflections, opinions, observations, insights
+  - "knowledge": reference materials, articles, videos, tutorials, educational content
+- "tags": array of up to 3 tags, chosen from the allowed list for the chosen destination (most relevant first):
+  - projects tags: ${JSON.stringify(tagOptions.projects)}
+  - journal tags: ${JSON.stringify(tagOptions.journal)}
+  - knowledge tags: ${JSON.stringify(tagOptions.knowledge)}
+- "reasoning": one sentence explaining the destination and tag choices
 - "confidence": number 0.0-1.0
 
-Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
+Return ONLY valid JSON in this shape: { "ideas": [ {...}, {...} ] }. No markdown, no explanation outside the JSON.`;
+}
 
-const EVALUATE_SYSTEM = `You are a QA evaluator deciding whether to accept or retry a classification.
+const EVALUATE_SYSTEM = `You are a QA evaluator deciding whether to accept or retry a per-idea classification.
 You receive the original ideas and a validator's score (0-10) with feedback.
 Return a JSON object:
 - "accepted": true if score >= 8, false otherwise
 - "reason": one sentence explaining your decision`;
 
-export async function classifyIdeas(ideas: ParsedIdea[]): Promise<ClassifyResult> {
+export async function classifyIdeas(ideas: ParsedIdea[], tagOptions: DestinationTagOptions): Promise<ClassifyResult> {
   const userMessage = ideas
     .map((idea, i) => {
       const linkNote = idea.link ? ` [link: ${idea.link}]` : "";
@@ -38,11 +62,12 @@ export async function classifyIdeas(ideas: ParsedIdea[]): Promise<ClassifyResult
     })
     .join("\n");
 
-  return askJSON<ClassifyResult>(
+  const response = await askJSON<{ ideas: IdeaClassification[] }>(
     "claude-haiku-4-5-20251001",
-    CLASSIFY_SYSTEM,
-    `Classify these ideas:\n${userMessage}`
+    buildClassifySystem(tagOptions),
+    `Classify and route these ideas:\n${userMessage}`
   );
+  return response.ideas;
 }
 
 export async function evaluateQA(

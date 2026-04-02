@@ -54,7 +54,7 @@ services:
       - "mcp.type=notion"
       - "mcp.version=1.0.0"
 
-  # HTTP API wrapper for n8n integration
+  # Notion HTTP API — used by the orchestrator for Notion read/write
   notion-idea-server-http:
     build:
       context: ./notion-idea-server
@@ -71,7 +71,7 @@ services:
     env_file:
       - ./notion-idea-server/.env
     
-    # Expose HTTP port for n8n
+    # Expose HTTP port for orchestrator access
     ports:
       - "3001:3001"
     
@@ -173,58 +173,6 @@ services:
     profiles:
       - dev
 
-  # n8n Workflow Automation Platform
-  n8n:
-    image: n8nio/n8n:latest
-    container_name: n8n-server
-    restart: unless-stopped
-    
-    # Port mapping
-    ports:
-      - "5678:5678"
-    
-    # Environment variables
-    environment:
-      - N8N_HOST=0.0.0.0
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - NODE_ENV=production
-      - WEBHOOK_URL=http://localhost:5678/
-      - GENERIC_TIMEZONE=America/New_York
-    
-    # Persistent data storage
-    volumes:
-      - n8n_data:/home/node/.n8n
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.2'
-    
-    # Networks
-    networks:
-      - mcp-network
-    
-    # Labels for service discovery
-    labels:
-      - "app=n8n"
-      - "service=workflow-automation"
-      - "version=latest"
-    
-    # Health check
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5678/healthz || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
   # Director MCP Server - Orchestrates multi-agent workflows
   director-mcp-server:
     build:
@@ -269,69 +217,6 @@ services:
       - "mcp.server=director-mcp-server"
       - "mcp.type=director"
       - "mcp.mode=stdio"
-      - "mcp.version=1.0.0"
-      - "service=workflow-orchestration"
-    
-    # Dependencies
-    depends_on:
-      - notion-idea-server-http
-
-  # Director MCP Server - HTTP Wrapper for n8n integration
-  director-mcp-server-http:
-    build:
-      context: ./director-mcp-server
-      dockerfile: Dockerfile
-      target: production
-    container_name: mcp-director-server-http
-    restart: unless-stopped
-    
-    environment:
-      - NODE_ENV=production
-      - SERVER_NAME=director-mcp-server-http
-      - SERVER_VERSION=1.0.0
-      - LOG_LEVEL=info
-      - PORT=3002
-    
-    # Expose HTTP port for n8n integration
-    ports:
-      - "3002:3002"
-    
-    # Mount template and schema files
-    volumes:
-      - ./director-mcp:/app/director-mcp:ro
-      - ./docs:/app/docs:ro
-      - director_logs_http:/app/logs
-    
-    # Override command to run HTTP wrapper
-    command: ["node", "dist/http-wrapper.js"]
-    
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.2'
-    
-    # Networks
-    networks:
-      - mcp-network
-    
-    # Health check for HTTP version
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    
-    # Labels for service discovery
-    labels:
-      - "mcp.server=director-mcp-server-http"
-      - "mcp.type=director"
-      - "mcp.mode=http"
       - "mcp.version=1.0.0"
       - "service=workflow-orchestration"
     
@@ -406,6 +291,49 @@ services:
   #     - "mcp.server=example-server"
   #     - "mcp.type=example"
 
+  # Orchestrator — TypeScript multi-agent pipeline runner (replaces n8n workflows)
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+      target: production
+    container_name: orchestrator
+    restart: unless-stopped
+
+    environment:
+      - NODE_ENV=production
+      - NOTION_API_URL=http://notion-idea-server-http:3001
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=orchestrator
+      - MYSQL_PASSWORD=orchestrator
+      - MYSQL_DATABASE=orchestrator
+
+    env_file:
+      - ./orchestrator/.env
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+      notion-idea-server-http:
+        condition: service_started
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+
+    networks:
+      - mcp-network
+
+    labels:
+      - "app=orchestrator"
+      - "service=pipeline-runner"
+
   # MySQL — workflow history and audit log for the orchestrator
   mysql:
     image: mysql:8.0
@@ -459,11 +387,7 @@ networks:
 volumes:
   mcp-shared-data:
     driver: local
-  n8n_data:
-    driver: local
   director_logs:
-    driver: local
-  director_logs_http:
     driver: local
   director_logs_dev:
     driver: local
