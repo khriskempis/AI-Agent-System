@@ -1,142 +1,117 @@
 # MCP Server Documentation
 
-Welcome to the MCP Server project documentation. This project provides an intelligent idea processing system using Notion and n8n workflows.
+Welcome to the MCP Server project — an intelligent idea processing system built with TypeScript pipelines, Claude agents, and Notion as the data layer.
 
-## 📂 Documentation Structure
+## System Architecture
 
-### 🚀 [Setup & Configuration](./setup/)
-Essential guides for getting the system running:
-
-- **[N8N Setup Guide](./setup/N8N_SETUP_GUIDE.md)** - Complete guide for setting up n8n with Claude integration
-- **[API Endpoints](./setup/API_ENDPOINTS.md)** - Reference for all MCP server endpoints
-- **[Examples & Best Practices](../n8n/workflows/examples/README.md)** - Working examples and configuration patterns
-
-### 🔧 [Troubleshooting](./troubleshooting/)
-Solutions for common issues:
-
-- **[Notion Property Fix](./troubleshooting/NOTION_PROPERTY_FIX.md)** - Resolving Notion property validation errors
-- **[Workflow Fixes Summary](./troubleshooting/WORKFLOW_FIXES_SUMMARY.md)** - Complete guide to n8n workflow configuration fixes
-
-### 🛠️ [Development](./development/)
-Development and configuration guides:
-
-- **[Docker Development Workflow](./development/DOCKER_DEVELOPMENT_WORKFLOW.md)** - Complete guide to Docker development and rebuild workflows
-- **[Daily Processing Modes](./development/DAILY_PROCESSING_MODES.md)** - Configure different processing schedules and modes
-- **[Testing Configurations](./development/TESTING_CONFIGURATIONS.md)** - How to test different workflow scenarios
-
-### 📚 [Archived](./archived/)
-Historical documents and planning materials:
-
-- **[Multi-Agent Workflow Plan](./archived/MULTI_AGENT_WORKFLOW_PLAN.md)** - Original architecture planning
-- **[Monitoring Dashboard Design](./archived/MONITORING_DASHBOARD_DESIGN.md)** - Future monitoring concepts
-
-## 🏗️ System Architecture
-
-### Core Components
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   n8n Workflow │    │   MCP Server    │    │  Notion Database│
-│   (AI Agents)   │◄──►│ (notion-idea-   │◄──►│   (Ideas)       │
-│                 │    │  server)        │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  orchestrator  (TypeScript — runs as a Docker container)     │
+│                                                              │
+│  node-cron (09:00 ET daily)                                  │
+│      → runDailyProcessing pipeline                           │
+│          → NotionAgent  (Layer 1: Notion HTTP facade)        │
+│          → categorizeIdea  (Layer 2: Claude pipeline)        │
+│      → PlannerAgent   (Layer 2: planning stub)               │
+│      → ValidationAgent (Layer 2: QA assessment)             │
+│  WorkflowContext tracks per-run phase results                │
+├──────────────────────────────────────────────────────────────┤
+│  notion-idea-server-http  (port 3001)                        │
+│  REST API over Notion — NotionAgent calls this               │
+├──────────────────────────────────────────────────────────────┤
+│  director-mcp-server  (stdio MCP — no HTTP port)             │
+│  TemplateManager + ContextManager exposed as MCP tools       │
+│  Used by Claude Desktop / MCP clients for workflow authoring │
+├──────────────────────────────────────────────────────────────┤
+│  MySQL  (port 3306)                                          │
+│  workflow_runs + workflow_events — durable audit log         │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Key Features
-- **🤖 Intelligent Director Agent**: Routes tasks to specialized agents
-- **📝 Notion Agent**: Processes and categorizes ideas
-- **📊 Planner Agent**: Strategic planning and task decomposition
-- **✅ Validation Agent**: Quality assurance and consistency checks
+## 3-Layer Agent Architecture
 
-## 🎯 Quick Start
+| Layer | What it is | Examples |
+|---|---|---|
+| Layer 3 — Director | Decides what pipelines to run, composes them dynamically | `scheduler.ts`, future director agent |
+| Layer 2 — Pipelines | Specific use cases — ordered sequences of tool calls | `categorize-idea.ts`, `daily-processing.ts` |
+| Layer 1 — Capability | Facade over external APIs — read/write/search methods only | `NotionAgent` |
 
-### **🐳 Docker Setup (Recommended)**
+**Rule: pipelines use agents, agents don't run pipelines.**
 
-The fastest way to get everything running:
+## [ARCHITECTURE.md](./ARCHITECTURE.md)
 
-```bash
-# Complete project setup
-cd "/Users/kkempis/Desktop/Coding Practice/MCP Server"
-./scripts/start-full-project.sh
-
-# Or silent startup
-./scripts/quick-start.sh
-```
-
-**✅ This automatically starts:**
-- **Main MCP Server** (stdio mode for direct MCP clients)
-- **HTTP API Server** (port 3001 for n8n agents) 
-- **n8n AI Platform** (port 5678 for workflows)
-
-**🌐 Access URLs:**
-- **n8n Platform**: http://localhost:5678
-- **MCP HTTP API**: http://localhost:3001
-
-### **🔧 Development Mode**
-
-For coding with hot reload:
-```bash
-./scripts/start-development.sh
-```
-
-### **📚 Manual Setup** 
-
-1. **Setup MCP Server**: Follow the [Notion Idea Server README](../notion-idea-server/README.md)
-2. **Configure n8n**: Use the [N8N Setup Guide](./setup/N8N_SETUP_GUIDE.md)
-3. **Import Workflow**: Load `simplified-intelligent-director.json`
-4. **Test & Run**: Use the [Testing Configurations](./development/TESTING_CONFIGURATIONS.md)
-
-## 🔗 Key Workflows
-
-### Daily Processing (Default)
-- **Trigger**: Daily at 9 AM
-- **Scope**: Today's unprocessed ideas (`daysBack=1`)
-- **Purpose**: Process fresh ideas without duplicates
-
-### Weekly Processing (Alternative)
-- **Trigger**: Weekly (Mondays)
-- **Scope**: Past week (`daysBack=7`)
-- **Purpose**: Batch processing of accumulated ideas
-
-## 🐛 Common Issues & Solutions
-
-| Issue | Solution |
-|-------|----------|
-| **Misconfigured placeholder errors** | See [Workflow Fixes Summary](./troubleshooting/WORKFLOW_FIXES_SUMMARY.md) |
-| **Notion property validation errors** | See [Notion Property Fix](./troubleshooting/NOTION_PROPERTY_FIX.md) |
-| **Daily vs weekly processing confusion** | See [Daily Processing Modes](./development/DAILY_PROCESSING_MODES.md) |
-
-## 📝 Contributing to Documentation
-
-When adding new documentation:
-
-1. **Choose the right folder**:
-   - `setup/` - Installation and configuration guides
-   - `troubleshooting/` - Error fixes and solutions
-   - `development/` - Development and testing guides
-   - `archived/` - Historical or deprecated content
-
-2. **Use consistent formatting**:
-   - Start with a clear title and brief description
-   - Use emojis for visual organization
-   - Include code examples where relevant
-   - Add troubleshooting sections for complex topics
-
-3. **Update this index** when adding new files
-
-## 📊 Current Status
-
-✅ **Working Features**:
-- Multi-agent n8n workflow with intelligent routing
-- Daily idea processing with proper date scoping
-- Notion property auto-detection and safe updates
-- Comprehensive error handling and debugging tools
-
-🚧 **Future Enhancements**:
-- Multi-MCP server architecture support
-- Enhanced cost optimization with local LLMs
-- Advanced monitoring and analytics dashboard
+The single authoritative reference for the full system. Read this first. Covers the 3-layer agent architecture, all component boundaries, pipeline stages, agent interfaces, WorkflowContext, withRetry, MySQL schema, Director MCP Server internals, and design decisions.
 
 ---
 
-**Last Updated**: January 2025  
-**Version**: 1.0 - Multi-Agent System with Daily Processing 
+## Documentation Structure
+
+### Setup
+- **[Orchestrator Setup](./setup/ORCHESTRATOR_SETUP.md)** — env vars, CLI commands, Docker, MySQL inspection
+- **[Director MCP Server Setup](./setup/DIRECTOR_MCP_SERVER_SETUP.md)** — stdio MCP usage, volume mounts for templates
+- **[API Endpoints](./setup/API_ENDPOINTS.md)** — notion-idea-server HTTP API reference
+- **[Multi-Database Configuration](./setup/MULTI_DATABASE_CONFIGURATION.md)** — Notion database ID configuration
+
+### Development
+- **[TypeScript Pipeline Architecture](./development/TYPESCRIPT_PIPELINE_ARCHITECTURE.md)** — canonical reference: pipeline stages, agent interfaces, withRetry, MySQL schema
+- **[Director MCP Server Implementation](./development/DIRECTOR_MCP_SERVER_IMPLEMENTATION.md)** — TemplateManager, ContextManager, surviving MCP tools
+- **[Multi-Agent Pipeline](./development/MULTI_AGENT_PIPELINE.md)** — the NotionAgent → PlannerAgent → ValidationAgent chain
+- **[Daily Processing](./development/DAILY_PROCESSING_MODES.md)** — how the scheduler and daily pipeline work
+- **[Workflow Templates](./development/WORKFLOW_TEMPLATES.md)** — JSON templates in `director-mcp/workflow-templates/`
+- **[Adding New Agents](./development/ADDING_NEW_AGENTS.md)** — step-by-step guide for extending the system
+
+### Troubleshooting
+- **[Notion Property Fix](./troubleshooting/NOTION_PROPERTY_FIX.md)** — Notion property validation errors
+- **[Notion Content Enhancement](./troubleshooting/NOTION_CONTENT_ENHANCEMENT.md)** — content formatting issues
+
+### Archived
+- **[Multi-Agent Workflow Plan](./archived/MULTI_AGENT_WORKFLOW_PLAN.md)** — original architecture planning
+- **[Multi-Agent Pipeline Design](./archived/MULTI_AGENT_PIPELINE_DESIGN.md)** — historical n8n workflow design (superseded by TypeScript pipelines)
+- **[Monitoring Dashboard Design](./archived/MONITORING_DASHBOARD_DESIGN.md)** — future monitoring concepts
+
+## Quick Start
+
+```bash
+# Start all production services
+./scripts/start-full-project.sh
+
+# Development mode (hot reload)
+./scripts/start-development.sh
+
+# Check orchestrator is ready to run
+./scripts/sync-agent-configs.sh
+```
+
+## Running the Orchestrator
+
+```bash
+cd orchestrator
+
+# Process a single idea (test without writing)
+npx tsx src/index.ts categorize-idea --id <notion-page-id> --dry-run
+
+# Process all unprocessed ideas once
+npx tsx src/index.ts categorize-idea --all
+
+# Start the daily scheduler (fires at 09:00 ET)
+npm start
+```
+
+## Inspecting Workflow History
+
+```bash
+docker exec -it orchestrator-mysql mysql -u orchestrator -porchestrator orchestrator
+
+-- Recent runs
+SELECT notion_page_name, status, current_stage, started_at
+FROM workflow_runs ORDER BY started_at DESC LIMIT 10;
+
+-- Events for a specific run
+SELECT stage, status, duration_ms FROM workflow_events
+WHERE run_id = '<run-id>' ORDER BY id;
+```
+
+---
+
+**Last Updated**: April 2026
+**Architecture**: TypeScript pipelines + Claude agents + MySQL audit log

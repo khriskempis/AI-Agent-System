@@ -1,163 +1,116 @@
-# Daily Processing Configuration Guide
+# Daily Processing
 
-## 🚨 Current Issue
-The workflow has a **mismatch** between daily execution and 7-day processing scope:
-- **Daily Trigger**: Runs every day at 9 AM
-- **Processing Scope**: Always looks at last 7 days (`daysBack=7`)
-- **Result**: Reprocesses the same ideas multiple times
+## How It Works
 
-## 🎯 Processing Mode Options
+The orchestrator runs a `node-cron` scheduler that fires at **09:00 America/New_York** every day. The scheduler is the Layer 3 director — it decides what pipelines to run and chains them together.
 
-### 1. **Daily Mode** (Recommended for Production)
-Process only ideas from the current day to avoid duplicates.
-
-**Configuration:**
-- **Director Prompt**: `"Focus on today's unprocessed ideas. Check for 'Not Started' status ideas from today only (daysBack=1)."`
-- **System Message**: Change `daysBack=7` to `daysBack=1`
-- **Use Case**: Daily automation for fresh ideas
-
-### 2. **Weekly Mode** (Good for Less Frequent Runs)
-Process ideas from the past week, but only run weekly.
-
-**Configuration:**
-- **Trigger**: Change cron to `0 9 * * 1` (Mondays at 9 AM)
-- **Keep**: `daysBack=7` in prompts
-- **Use Case**: Weekly batch processing
-
-### 3. **Testing Mode** (For Development/Testing)
-Flexible date range for testing specific scenarios.
-
-**Configuration:**
-- **Dynamic Parameters**: Add configurable `daysBack` parameter
-- **Manual Trigger**: Use manual execution with different date ranges
-- **Use Case**: Testing different scenarios and date ranges
-
-### 4. **Smart Mode** (Advanced)
-Intelligently determine scope based on last successful run.
-
-**Configuration:**
-- **State Tracking**: Store last successful execution timestamp
-- **Dynamic Range**: Calculate days since last run
-- **Use Case**: Resilient processing that handles outages
-
-## 🔧 Implementation Options
-
-### Option A: Quick Fix (Daily Mode)
-**Modify existing workflow for daily processing:**
-
-1. **Change Director Prompt** (Line 168):
 ```
-"Focus on today's unprocessed ideas. Check for 'Not Started' status ideas from today only, process them efficiently, and confirm completion."
+node-cron (09:00 ET)
+  └─ runDailyWorkflow()
+       ├─ Phase 1: runDailyProcessing()   ← Layer 2 pipeline
+       │    ├─ NotionAgent.getAllUnprocessed()  ← Layer 1 tool
+       │    └─ categorizeIdea(id) per idea     ← Layer 2 pipeline
+       ├─ Phase 2: PlannerAgent.execute()
+       └─ Phase 3: ValidationAgent.execute()
 ```
 
-2. **Change System Message Instructions**:
-```
-- **Priority**: Focus on 'Not Started' ideas from today only (daysBack=1)
-- **Check Recent Ideas**: Use get_ideas with status='Not Started' and daysBack=1 to find today's unprocessed ideas
-```
+Each phase result is stored in `WorkflowContext` so downstream agents can inspect what prior phases produced.
 
-### Option B: Configurable Parameters
-**Add dynamic date range configuration:**
+## Starting the Scheduler
 
-1. **Add Parameter Node** before Director:
-```json
-{
-  "parameters": {
-    "assignments": {
-      "assignments": [
-        {
-          "name": "processingDays",
-          "value": "1",
-          "type": "number"
-        },
-        {
-          "name": "processingMode", 
-          "value": "daily",
-          "type": "string"
-        }
-      ]
-    }
-  }
-}
+```bash
+# Via Docker (production)
+docker-compose up -d orchestrator
+
+# Locally (development)
+cd orchestrator
+npm start                    # compiles + runs scheduler
+# or
+npx tsx src/index.ts scheduler
 ```
 
-2. **Dynamic Director Prompt**:
-```
-"Focus on unprocessed ideas from the last {{ $('Set Processing Parameters').item.json.processingDays }} day(s). Process efficiently and confirm completion."
-```
+The process stays alive — `node-cron` keeps the event loop running. Press `Ctrl+C` to stop.
 
-### Option C: Testing Configuration
-**For manual testing with flexible date ranges:**
+## Running a Manual One-Off
 
-1. **Manual Trigger Node** instead of Cron
-2. **Input Parameters** for date range
-3. **Testing Presets**:
-   - `daysBack=1` (today only)
-   - `daysBack=7` (this week)
-   - `daysBack=30` (this month)
+```bash
+cd orchestrator
 
-## 📅 Recommended Daily Schedule
+# Process a single idea by Notion page ID
+npx tsx src/index.ts categorize-idea --id <notion-page-id>
 
-### Production Daily Workflow:
-```
-6:00 AM - Trigger execution
-6:01 AM - Process today's ideas (daysBack=1)
-6:05 AM - Complete processing and report
+# Process all unprocessed ideas (status = "Not Started") right now
+npx tsx src/index.ts categorize-idea --all
+
+# Dry-run — fetch and classify but don't write back to Notion
+npx tsx src/index.ts categorize-idea --id <notion-page-id> --dry-run
 ```
 
-### Weekly Cleanup:
+## Pipeline Stages
+
+The `categorizeIdea` pipeline runs these stages in order:
+
+| Stage | What it does |
+|---|---|
+| FETCH | Load the idea page from Notion via `NotionAgent.getIdea()` |
+| PARSE | Extract title, description, tags from raw Notion properties |
+| CLASSIFY | Ask Claude to assign a category (Projects / Knowledge / Journal) |
+| VALIDATE | Ask Claude to verify the classification is well-reasoned |
+| EVALUATE | Check if the classification passes quality bar; loop if not |
+| WRITE | Call `NotionAgent.updateIdea()` to write tags + status back to Notion |
+
+The CLASSIFY → VALIDATE → EVALUATE loop retries up to `MAX_RETRIES = 2` times before setting status to "Needs Review".
+
+## Retry Behavior
+
+Each stage is wrapped with `withRetry()`:
+
 ```
-Monday 7:00 AM - Weekly cleanup (daysBack=7)
-Monday 7:10 AM - Validate all processed ideas
+withRetry(fn, { maxAttempts: 3, backoffMs: 1000 })
 ```
 
-## 🧪 Testing Scenarios
+Retries use exponential backoff: 1s, 2s, 3s. Retries are per-stage — a failed VALIDATE does not restart from FETCH.
 
-### Test Single Day:
+The scheduler wraps each phase with `maxAttempts: 2, backoffMs: 2000`.
+
+## Idempotency
+
+Before starting, `categorizeIdea` checks `isRunning(notionPageId)` against MySQL. If a run is already in progress for that page ID, it skips — preventing duplicate processing if the scheduler fires twice.
+
+## Inspecting Run History
+
+```bash
+docker exec -it orchestrator-mysql mysql -u orchestrator -porchestrator orchestrator
+
+-- What ran today?
+SELECT notion_page_name, status, current_stage, started_at
+FROM workflow_runs
+WHERE DATE(started_at) = CURDATE()
+ORDER BY started_at DESC;
+
+-- Detailed events for a run
+SELECT stage, status, attempt, duration_ms, error_message
+FROM workflow_events
+WHERE run_id = '<run-id>'
+ORDER BY id;
 ```
-Manual execution with daysBack=1
+
+## Changing the Schedule
+
+The cron expression is in `orchestrator/src/scheduler.ts`:
+
+```typescript
+cron.schedule(
+  "0 9 * * *",          // 09:00 daily
+  () => { runDailyWorkflow()... },
+  { timezone: "America/New_York" }
+);
 ```
 
-### Test Current Week:
-```
-Manual execution with daysBack=7
-```
+Change the first argument to any valid cron expression. Common alternatives:
 
-### Test Specific Date Range:
-```
-Manual execution with custom date filters
-```
-
-## ⚙️ Configuration Examples
-
-### For Daily Production:
-- **Trigger**: `0 6 * * *` (6 AM daily)
-- **daysBack**: `1` (today only)
-- **Focus**: Fresh ideas from yesterday/today
-
-### For Testing:
-- **Trigger**: Manual
-- **daysBack**: Variable (1, 7, 30)
-- **Focus**: Specific scenarios
-
-### For Weekly Batch:
-- **Trigger**: `0 7 * * 1` (Monday 7 AM)
-- **daysBack**: `7` (full week)
-- **Focus**: Weekly processing cycle
-
-## 🎛️ Quick Configuration Changes
-
-**To test 1 day only:**
-1. Set Director prompt to mention `daysBack=1`
-2. Change system message to focus on daily processing
-3. Run manually to test
-
-**To test current setup:**
-1. Keep `daysBack=7`
-2. Run manually
-3. Observe duplicate processing behavior
-
-**To fix for production:**
-1. Implement Daily Mode configuration
-2. Change to `daysBack=1`
-3. Schedule for daily execution 
+| Goal | Cron expression |
+|---|---|
+| Every day at 6 AM ET | `0 6 * * *` |
+| Weekdays only, 9 AM ET | `0 9 * * 1-5` |
+| Every Monday at 7 AM ET | `0 7 * * 1` |
