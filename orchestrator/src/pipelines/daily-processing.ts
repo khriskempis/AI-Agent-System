@@ -52,12 +52,12 @@ export async function runDailyProcessing(): Promise<AgentOutput> {
   const failedIds: string[] = [];
 
   for (const idea of ideas) {
-    logger.info(`[daily-processing] → "${idea.name}" (${idea.id})`);
+    logger.info(`[daily-processing] → "${idea.title}" (${idea.id})`);
     try {
       await categorizeIdea(idea.id);
       processedIds.push(idea.id);
     } catch (err) {
-      const msg = `"${idea.name}" (${idea.id}): ${String(err)}`;
+      const msg = `"${idea.title}" (${idea.id}): ${String(err)}`;
       logger.error(`[daily-processing] Failed — ${msg}`);
       errors.push(msg);
       failedIds.push(idea.id);

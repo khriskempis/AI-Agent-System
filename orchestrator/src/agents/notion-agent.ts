@@ -13,7 +13,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const body = await res.text();
     throw new Error(`HTTP ${res.status} from ${url}: ${body}`);
   }
-  return res.json() as Promise<T>;
+  const json = await res.json() as any;
+  // Unwrap { success, data } envelope from notion-idea-server responses
+  return (json?.data !== undefined ? json.data : json) as T;
 }
 
 /**
@@ -31,9 +33,9 @@ export class NotionAgent {
     return request<NotionIdea>(`/api/ideas/${id}`);
   }
 
-  /** Fetch all ideas whose status is "Not Started" */
+  /** Fetch all ideas whose status is "Not started" */
   async getAllUnprocessed(): Promise<NotionIdea[]> {
-    return request<NotionIdea[]>("/api/ideas?status=Not%20Started");
+    return request<NotionIdea[]>("/api/ideas?status=Not%20started");
   }
 
   /** Fetch all ideas, optionally filtered by status */
@@ -67,42 +69,80 @@ export class NotionAgent {
   }
 
   /**
+   * Fetch the available tag names from a database's Tags multi_select property.
+   * Returns an empty array if the database has no Tags property.
+   */
+  async getTagOptions(databaseId: string): Promise<string[]> {
+    const schemaRes = await request<{ propertyDetails: Record<string, any> }>(
+      `/api/databases/${databaseId}/schema`
+    );
+    const tagsEntry = Object.entries(schemaRes.propertyDetails).find(
+      ([name, v]) => v.type === "multi_select" && name.toLowerCase() === "tags"
+    );
+    if (!tagsEntry) return [];
+    return (tagsEntry[1].multi_select?.options ?? []).map((o: any) => o.name as string);
+  }
+
+  /**
    * Create a new page in any database.
-   * Auto-detects the title property name from the database schema.
+   * Auto-detects title, tags, and status property names from the database schema.
+   * Filters tags to only those that exist in the database's multi_select options.
    */
   async createPage(
     databaseId: string,
-    title: string,
-    content: string,
-    tags: string[]
+    shortTitle: string,
+    description: string,
+    originalText: string,
+    suggestedTags: string[]
   ): Promise<{ id: string; url: string }> {
-    // Fetch schema to find the title property name
-    const schemaRes = await request<{ success: boolean; data: { propertyDetails: Record<string, { type: string }> } }>(
+    // Fetch schema (request auto-unwraps { success, data })
+    const schemaRes = await request<{ propertyDetails: Record<string, any> }>(
       `/api/databases/${databaseId}/schema`
     );
-    const titleProp = Object.entries(schemaRes.data.propertyDetails).find(
-      ([, v]) => v.type === "title"
-    );
-    if (!titleProp) {
-      throw new Error(`No title property found in database ${databaseId}`);
-    }
-    const titlePropertyName = titleProp[0];
+    const details = schemaRes.propertyDetails;
+
+    // Find title property
+    const titleEntry = Object.entries(details).find(([, v]) => v.type === "title");
+    if (!titleEntry) throw new Error(`No title property found in database ${databaseId}`);
 
     const properties: Record<string, unknown> = {
-      [titlePropertyName]: {
-        title: [{ text: { content: title } }],
+      [titleEntry[0]]: {
+        title: [{ text: { content: shortTitle } }],
       },
     };
 
-    // Add tags if the database has a Tags multi_select property
-    const tagsProp = Object.entries(schemaRes.data.propertyDetails).find(
+    // Find tags property and filter to only allowed options in this database
+    const tagsEntry = Object.entries(details).find(
       ([name, v]) => v.type === "multi_select" && name.toLowerCase() === "tags"
     );
-    if (tagsProp && tags.length > 0) {
-      properties[tagsProp[0]] = {
-        multi_select: tags.map((t) => ({ name: t })),
-      };
+    if (tagsEntry && suggestedTags.length > 0) {
+      const allowedOptions: string[] = (tagsEntry[1].multi_select?.options ?? []).map((o: any) => o.name as string);
+      const validTags = suggestedTags.filter((t) => allowedOptions.includes(t));
+      if (validTags.length > 0) {
+        properties[tagsEntry[0]] = {
+          multi_select: validTags.map((t) => ({ name: t })),
+        };
+      }
     }
+
+    // Find status property and set to first available "not started" option
+    const statusEntry = Object.entries(details).find(
+      ([, v]) => v.type === "status" || v.type === "select"
+    );
+    if (statusEntry) {
+      const options: string[] = (statusEntry[1].status?.options ?? statusEntry[1].select?.options ?? []).map((o: any) => o.name as string);
+      const defaultStatus = options.find((o) =>
+        ["not started", "to-do", "todo", "to do", "backlog"].includes(o.toLowerCase())
+      ) ?? options[0];
+      if (defaultStatus) {
+        properties[statusEntry[0]] = statusEntry[1].type === "status"
+          ? { status: { name: defaultStatus } }
+          : { select: { name: defaultStatus } };
+      }
+    }
+
+    // Build content: description first, then original blurb
+    const content = `${description}\n\n---\n\nOriginal idea:\n${originalText}`;
 
     return request<{ id: string; url: string }>(`/api/databases/${databaseId}/pages`, {
       method: "POST",

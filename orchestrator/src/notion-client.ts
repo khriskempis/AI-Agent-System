@@ -4,8 +4,8 @@ const BASE_URL = process.env.NOTION_API_URL ?? "http://localhost:3001";
 
 export interface NotionIdea {
   id: string;
-  name: string;
-  status: "Not Started" | "In Progress" | "Done" | "Needs Review";
+  title: string;
+  status: "Not started" | "In progress" | "Done" | "Needs Review";
   tags: string[];
   howManyIdeas: number;
   content: string;
@@ -20,7 +20,7 @@ export interface UpdateIdeaPayload {
 async function request<T>(
   path: string,
   options: RequestInit = {}
-): Promise<T> {
+): Promise<{ success: boolean; data: T }> {
   const url = `${BASE_URL}${path}`;
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
@@ -30,15 +30,17 @@ async function request<T>(
     const body = await res.text();
     throw new Error(`HTTP ${res.status} from ${url}: ${body}`);
   }
-  return res.json() as Promise<T>;
+  return res.json() as Promise<{ success: boolean; data: T }>;
 }
 
 export async function getIdea(id: string): Promise<NotionIdea> {
-  return request<NotionIdea>(`/api/ideas/${id}`);
+  const res = await request<NotionIdea>(`/api/ideas/${id}`);
+  return res.data;
 }
 
 export async function getAllUnprocessedIdeas(): Promise<NotionIdea[]> {
-  return request<NotionIdea[]>("/api/ideas?status=Not%20Started");
+  const res = await request<NotionIdea[]>("/api/ideas?status=Not%20started");
+  return res.data;
 }
 
 export async function updateIdea(

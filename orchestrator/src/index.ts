@@ -34,7 +34,7 @@ async function main(): Promise<void> {
 
       for (const idea of ideas) {
         console.log(`\n${"=".repeat(60)}`);
-        console.log(`Processing: ${idea.name} (${idea.id})`);
+        console.log(`Processing: ${idea.title} (${idea.id})`);
         console.log("=".repeat(60));
         await categorizeIdea(idea.id, { dryRun });
       }

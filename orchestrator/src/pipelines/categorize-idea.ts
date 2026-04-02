@@ -1,6 +1,6 @@
 import { getIdea, updateIdea, type NotionIdea } from "../notion-client.js";
 import { parseIdeas } from "../parser.js";
-import { classifyIdeas, evaluateQA, type ClassifyResult, type RoutingDestination } from "../agents/director.js";
+import { classifyIdeas, evaluateQA, type ClassifyResult, type RoutingDestination, type DestinationTagOptions } from "../agents/director.js";
 import { validateClassification } from "../agents/validator.js";
 import { NotionAgent } from "../agents/notion-agent.js";
 import { logger } from "../logger.js";
@@ -40,9 +40,9 @@ export async function categorizeIdea(
 
     const idea = await withRetry(() => getIdea(id), { label: "FETCH" });
 
-    await logEvent(runId, "FETCH", "COMPLETED", 1, { name: idea.name, status: idea.status }, undefined, Date.now() - fetchStart);
-    await updateRunStage(runId, "FETCH", { fetch: { id: idea.id, name: idea.name, status: idea.status } });
-    logger.success(`Fetched: "${idea.name}" (status: ${idea.status})`);
+    await logEvent(runId, "FETCH", "COMPLETED", 1, { name: idea.title, status: idea.status }, undefined, Date.now() - fetchStart);
+    await updateRunStage(runId, "FETCH", { fetch: { id: idea.id, name: idea.title, status: idea.status } });
+    logger.success(`Fetched: "${idea.title}" (status: ${idea.status})`);
 
     // ─── STAGE 2: PARSE ───────────────────────────────────────────────────────
     logger.stage("PARSE", "Parsing ideas from page content");
@@ -58,6 +58,15 @@ export async function categorizeIdea(
       logger.info(`${i + 1}. ${p.text}${p.link ? ` → ${p.link}` : ""}`);
     });
 
+    // ─── FETCH TAG OPTIONS ────────────────────────────────────────────────────
+    const notionAgentForTags = new NotionAgent();
+    const tagOptions: DestinationTagOptions = {
+      projects: await notionAgentForTags.getTagOptions(process.env.NOTION_PROJECTS_DATABASE_ID!),
+      knowledge: await notionAgentForTags.getTagOptions(process.env.NOTION_KNOWLEDGE_DATABASE_ID!),
+      journal: await notionAgentForTags.getTagOptions(process.env.NOTION_JOURNAL_DATABASE_ID!),
+    };
+    logger.info(`[classify] Tag options loaded — projects:${tagOptions.projects.length} knowledge:${tagOptions.knowledge.length} journal:${tagOptions.journal.length}`);
+
     // ─── STAGES 3-5: CLASSIFY → VALIDATE → EVALUATE (QA loop) ───────────────
     let classifyResult: ClassifyResult | null = null;
     let attempts = 0;
@@ -70,7 +79,7 @@ export async function categorizeIdea(
       await logEvent(runId, "CLASSIFY", "STARTED", attempts);
       const classifyStart = Date.now();
       try {
-        classifyResult = await withRetry(() => classifyIdeas(parsedIdeas), { label: "CLASSIFY" });
+        classifyResult = await withRetry(() => classifyIdeas(parsedIdeas, tagOptions), { label: "CLASSIFY" });
         await logEvent(runId, "CLASSIFY", "COMPLETED", attempts, classifyResult, undefined, Date.now() - classifyStart);
       } catch (err) {
         await logEvent(runId, "CLASSIFY", "FAILED", attempts, undefined, String(err), Date.now() - classifyStart);
@@ -85,7 +94,7 @@ export async function categorizeIdea(
       let validation;
       try {
         validation = await withRetry(
-          () => validateClassification(parsedIdeas, classifyResult!),
+          () => validateClassification(parsedIdeas, classifyResult!, tagOptions),
           { label: "VALIDATE" }
         );
         await logEvent(runId, "VALIDATE", "COMPLETED", attempts, validation, undefined, Date.now() - validateStart);
@@ -177,28 +186,34 @@ async function writeResult(
     const content = classification.text;
 
     if (options.dryRun) {
-      logger.info(`[dry-run] Would create page in ${classification.destination} (${dbId.slice(0, 8)}...): "${classification.text.slice(0, 60)}"`);
-      logger.json("classification", { destination: classification.destination, tags: classification.tags, reasoning: classification.reasoning });
+      logger.info(`[dry-run] Would create page in ${classification.destination} (${dbId.slice(0, 8)}...)`);
+      logger.json("classification", {
+        shortTitle: classification.shortTitle,
+        description: classification.description,
+        destination: classification.destination,
+        tags: classification.tags,
+        reasoning: classification.reasoning,
+      });
       continue;
     }
 
     try {
-      const created = await notionAgent.createPage(dbId, classification.text, content, classification.tags);
-      logger.success(`Created in ${classification.destination}: "${classification.text.slice(0, 60)}" → ${created.url}`);
+      const created = await notionAgent.createPage(
+        dbId,
+        `TEST-${classification.shortTitle}`,
+        classification.description,
+        classification.text,
+        classification.tags
+      );
+      logger.success(`Created in ${classification.destination}: "${classification.shortTitle}" → ${created.url}`);
     } catch (err) {
       logger.warn(`Failed to create page in ${classification.destination}: ${String(err)}`);
     }
   }
 
-  // Collect all tags from across all classifications and merge with existing
-  const allNewTags = [...new Set(classifyResult.flatMap((c) => c.tags))];
-  const existingTags = new Set(idea.tags);
-  const mergedTags = [...idea.tags, ...allNewTags.filter((t) => !existingTags.has(t))];
-
   const sourcePayload = {
-    tags: mergedTags,
     howManyIdeas: ideaCount,
-    status: "Done" as const,
+    status: "Done" as const,  // marks source idea as fully processed
   };
 
   if (options.dryRun) {
@@ -208,5 +223,5 @@ async function writeResult(
   }
 
   await updateIdea(idea.id, sourcePayload);
-  logger.success(`Source idea marked Done: tags=${mergedTags.join(", ")}, howManyIdeas=${ideaCount}`);
+  logger.success(`Source idea marked Done: howManyIdeas=${ideaCount}`);
 }
