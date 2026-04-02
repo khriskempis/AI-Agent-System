@@ -486,4 +486,127 @@ export class GenericNotionService {
       throw new Error(`Failed to detect property mappings for database ${databaseId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+
+  /**
+   * Create a new page in any database with optional content blocks
+   */
+  async createDatabasePage(databaseId: string, properties: any, children?: any[]): Promise<any> {
+    try {
+      const pageData: any = {
+        parent: { database_id: databaseId },
+        properties: properties
+      };
+      
+      // Add content blocks if provided
+      if (children && children.length > 0) {
+        pageData.children = children;
+      }
+      
+      const response = await this.notion.pages.create(pageData);
+      
+      return {
+        id: response.id,
+        url: (response as any).url || `https://www.notion.so/${response.id.replace(/-/g, '')}`,
+        properties: (response as any).properties || {},
+        created_time: (response as any).created_time || new Date().toISOString(),
+        last_edited_time: (response as any).last_edited_time || new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error creating database page:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Convert markdown-like text to Notion blocks
+   */
+  convertTextToNotionBlocks(text: string): any[] {
+    const lines = text.split('\n');
+    const blocks: any[] = [];
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      if (!trimmedLine) {
+        // Empty line - add paragraph block
+        blocks.push({
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: []
+          }
+        });
+      } else if (trimmedLine.startsWith('# ')) {
+        // Heading 1
+        blocks.push({
+          object: 'block',
+          type: 'heading_1',
+          heading_1: {
+            rich_text: [{ type: 'text', text: { content: trimmedLine.substring(2) } }]
+          }
+        });
+      } else if (trimmedLine.startsWith('## ')) {
+        // Heading 2
+        blocks.push({
+          object: 'block',
+          type: 'heading_2',
+          heading_2: {
+            rich_text: [{ type: 'text', text: { content: trimmedLine.substring(3) } }]
+          }
+        });
+      } else if (trimmedLine.startsWith('### ')) {
+        // Heading 3
+        blocks.push({
+          object: 'block',
+          type: 'heading_3',
+          heading_3: {
+            rich_text: [{ type: 'text', text: { content: trimmedLine.substring(4) } }]
+          }
+        });
+      } else if (trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ')) {
+        // Bullet list
+        blocks.push({
+          object: 'block',
+          type: 'bulleted_list_item',
+          bulleted_list_item: {
+            rich_text: [{ type: 'text', text: { content: trimmedLine.substring(2) } }]
+          }
+        });
+      } else if (/^\d+\.\s/.test(trimmedLine)) {
+        // Numbered list
+        const content = trimmedLine.replace(/^\d+\.\s/, '');
+        blocks.push({
+          object: 'block',
+          type: 'numbered_list_item',
+          numbered_list_item: {
+            rich_text: [{ type: 'text', text: { content } }]
+          }
+        });
+      } else if (trimmedLine.startsWith('```')) {
+        // Code block (simplified - just treat as paragraph for now)
+        blocks.push({
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{ 
+              type: 'text', 
+              text: { content: trimmedLine },
+              annotations: { code: true }
+            }]
+          }
+        });
+      } else {
+        // Regular paragraph
+        blocks.push({
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{ type: 'text', text: { content: trimmedLine } }]
+          }
+        });
+      }
+    }
+    
+    return blocks;
+  }
 }

@@ -16,6 +16,19 @@
       "mcp_endpoint": "/api/workflows/templates/idea_categorization",
       "created_date": "2025-09-03",
       "tags": ["categorization", "multi-idea", "database-routing", "notion"]
+    },
+    "database_item_creation": {
+      "template_id": "database_item_creation_v1",
+      "file_path": "./database-item-creation-v1.json",
+      "workflow_type": "database_creation",
+      "version": "1.0.0",
+      "status": "active",
+      "description": "Create database items from categorized ideas in Phase 2",
+      "supported_agents": ["notion"],
+      "required_databases": ["projects", "knowledge", "journal"],
+      "mcp_endpoint": "/api/workflows/templates/database_item_creation",
+      "created_date": "2025-09-08",
+      "tags": ["database-creation", "phase2", "item-creation", "notion"]
     }
   },
   
@@ -27,6 +40,10 @@
     "project_management": {
       "description": "Workflows for managing projects and tasks",
       "templates": []
+    },
+    "database_creation": {
+      "description": "Workflows for creating database items and managing data",
+      "templates": ["database_item_creation"]
     },
     "content_creation": {
       "description": "Workflows for creating and managing content",

@@ -5,6 +5,12 @@
 
 import winston from 'winston';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Define log levels
 const logLevels = {
@@ -80,25 +86,6 @@ logger.rejections.handle(
   })
 );
 
-// Add request logging helper
-export const requestLogger = (req: any, res: any, next: any) => {
-  const start = Date.now();
-  
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    logger.info('HTTP Request', {
-      method: req.method,
-      url: req.url,
-      status: res.statusCode,
-      duration_ms: duration,
-      user_agent: req.get('User-Agent'),
-      ip: req.ip,
-      task_id: req.headers['x-director-task-id'],
-      workflow_id: req.headers['x-director-workflow-id']
-    });
-  });
-  
-  next();
-};
+// Note: Request logging middleware removed - not needed for MCP protocol
 
 export default logger;

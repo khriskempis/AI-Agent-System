@@ -1,0 +1,44 @@
+{
+  "tool_metadata": {
+    "name": "notion-update-idea",
+    "version": "1.0.0",
+    "description": "Update idea status and properties", 
+    "last_updated": "2025-01-08",
+    "status": "verified"
+  },
+  "node_config": {
+    "name": "Notion Update Idea",
+    "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", 
+    "typeVersion": 1.1,
+    "parameters": {
+      "toolDescription": "Update idea status - simplified for testing. REQUIRED: Always provide status parameter. Use 'In Progress' or 'Done'.",
+      "method": "PUT",
+      "url": "http://mcp-notion-idea-server-http:3001/api/ideas/{idea_id}",
+      "sendBody": true,
+      "specifyBody": "json",
+      "jsonBody": "{\\n  \\\"status\\\": \\\"{status}\\\",\\n  \\\"tags\\\": \\\"{tags}\\\"\\n}",
+      "placeholderDefinitions": {
+        "values": [
+          {
+            "name": "idea_id", 
+            "description": "The ID of the idea to update"
+          },
+          {
+            "name": "status",
+            "description": "New status: 'Not Started', 'In Progress', 'Done'"
+          },
+          {
+            "name": "tags",
+            "description": "Optional comma-separated tags to add to the idea"
+          }
+        ]
+      }
+    },
+    "position": [700, 500]
+  },
+  "notes": {
+    "production_url": "http://mcp-notion-idea-server-http:3001/api/ideas/{idea_id}",
+    "development_url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
+    "json_format": "Fixed format without n8n expressions - critical for LangChain compatibility"
+  }
+}

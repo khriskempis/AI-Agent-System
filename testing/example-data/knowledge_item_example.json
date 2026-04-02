@@ -1,0 +1,61 @@
+{
+  "properties": {
+    "Title": {
+      "title": [
+        {
+          "text": {
+            "content": "Machine Learning Algorithms Reference Guide"
+          }
+        }
+      ]
+    },
+    "Content": {
+      "rich_text": [
+        {
+          "text": {
+            "content": "Comprehensive guide on different ML algorithms, when to use each, and implementation examples. Covers supervised learning (linear regression, decision trees, random forests, SVM, neural networks), unsupervised learning (k-means, hierarchical clustering, PCA), and reinforcement learning basics. Includes practical code examples in Python with scikit-learn and TensorFlow."
+          }
+        }
+      ]
+    },
+    "Type": {
+      "select": {
+        "name": "Technical Reference"
+      }
+    },
+    "Category": {
+      "select": {
+        "name": "Machine Learning"
+      }
+    },
+    "Tags": {
+      "multi_select": [
+        {"name": "machine-learning"},
+        {"name": "algorithms"},
+        {"name": "reference"},
+        {"name": "education"},
+        {"name": "python"},
+        {"name": "data-science"}
+      ]
+    },
+    "Source": {
+      "rich_text": [
+        {
+          "text": {
+            "content": "Categorized from Ideas Database - ID: 16cd7be3dbcd80e1aac9c3a95ffaa61a"
+          }
+        }
+      ]
+    },
+    "Date Added": {
+      "date": {
+        "start": "2025-01-15"
+      }
+    },
+    "Priority": {
+      "select": {
+        "name": "Medium"
+      }
+    }
+  }
+}

@@ -16,7 +16,7 @@ echo -e "${BLUE}🔄 Agent Configuration Sync Checker${NC}"
 echo -e "${BLUE}======================================${NC}"
 
 # Paths
-MAIN_WORKFLOW="n8n/workflows/simplified-intelligent-director.json"
+MAIN_WORKFLOW="n8n/workflows/multi-agent-workflow-system.json"
 INDIVIDUAL_DIR="n8n/workflows/individual-agents"
 NOTION_INDIVIDUAL="$INDIVIDUAL_DIR/notion-agent.json"
 DIRECTOR_INDIVIDUAL="$INDIVIDUAL_DIR/director-agent.json"

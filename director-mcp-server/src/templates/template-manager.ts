@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.js';
 import {
   WorkflowTemplate,
   DirectorToAgentInstruction,
@@ -16,7 +16,7 @@ import {
   CategorizationMethodology,
   DatabaseExecution,
   ContentProcessing
-} from '../types/workflow';
+} from '../types/workflow.js';
 
 export class TemplateManager {
   private templateCache: Map<string, WorkflowTemplate> = new Map();
@@ -24,7 +24,7 @@ export class TemplateManager {
   private registryPath: string;
 
   constructor() {
-    // Point to the workflow templates directory (Docker volume mount)
+    // Point to the workflow templates directory (mounted in Docker container)
     this.templateDirectory = path.join(process.cwd(), 'director-mcp/workflow-templates');
     this.registryPath = path.join(this.templateDirectory, 'template-registry.json');
     this.loadTemplateRegistry();

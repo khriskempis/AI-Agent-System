@@ -1,0 +1,183 @@
+{
+  "object": "database",
+  "title": [
+    {
+      "type": "text",
+      "text": {
+        "content": "🤖 Workflow Executions",
+        "link": null
+      }
+    }
+  ],
+  "description": [
+    {
+      "type": "text",
+      "text": {
+        "content": "Track and monitor all workflow executions from Director MCP Server",
+        "link": null
+      }
+    }
+  ],
+  "properties": {
+    "Workflow Name": {
+      "title": {}
+    },
+    "Status": {
+      "select": {
+        "options": [
+          {
+            "name": "⏳ Pending",
+            "color": "gray"
+          },
+          {
+            "name": "🏃 Running",
+            "color": "blue"
+          },
+          {
+            "name": "✅ Completed",
+            "color": "green"
+          },
+          {
+            "name": "❌ Failed",
+            "color": "red"
+          },
+          {
+            "name": "⏸️ Paused",
+            "color": "yellow"
+          }
+        ]
+      }
+    },
+    "Workflow Type": {
+      "select": {
+        "options": [
+          {
+            "name": "idea_categorization",
+            "color": "purple"
+          },
+          {
+            "name": "content_processing",
+            "color": "blue"
+          },
+          {
+            "name": "project_planning",
+            "color": "green"
+          },
+          {
+            "name": "data_analysis",
+            "color": "orange"
+          }
+        ]
+      }
+    },
+    "Target Agent": {
+      "select": {
+        "options": [
+          {
+            "name": "notion",
+            "color": "blue"
+          },
+          {
+            "name": "planner",
+            "color": "green"
+          },
+          {
+            "name": "validation",
+            "color": "yellow"
+          }
+        ]
+      }
+    },
+    "Started": {
+      "date": {}
+    },
+    "Completed": {
+      "date": {}
+    },
+    "Duration (ms)": {
+      "number": {
+        "format": "number_with_commas"
+      }
+    },
+    "Ideas Processed": {
+      "number": {}
+    },
+    "Operations Completed": {
+      "number": {}
+    },
+    "LLM Provider": {
+      "select": {
+        "options": [
+          {
+            "name": "OpenAI GPT-4",
+            "color": "green"
+          },
+          {
+            "name": "OpenAI GPT-3.5",
+            "color": "blue"
+          },
+          {
+            "name": "Anthropic Claude",
+            "color": "purple"
+          },
+          {
+            "name": "Local Ollama",
+            "color": "gray"
+          }
+        ]
+      }
+    },
+    "Context ID": {
+      "rich_text": {}
+    },
+    "Error Message": {
+      "rich_text": {}
+    },
+    "Configuration": {
+      "rich_text": {}
+    },
+    "Results Summary": {
+      "rich_text": {}
+    },
+    "Priority": {
+      "select": {
+        "options": [
+          {
+            "name": "🔴 High",
+            "color": "red"
+          },
+          {
+            "name": "🟡 Medium",
+            "color": "yellow"
+          },
+          {
+            "name": "🟢 Low",
+            "color": "green"
+          }
+        ]
+      }
+    },
+    "Triggered By": {
+      "select": {
+        "options": [
+          {
+            "name": "Manual",
+            "color": "gray"
+          },
+          {
+            "name": "Scheduled",
+            "color": "blue"
+          },
+          {
+            "name": "API Call",
+            "color": "green"
+          },
+          {
+            "name": "Webhook",
+            "color": "purple"
+          }
+        ]
+      }
+    }
+  }
+}

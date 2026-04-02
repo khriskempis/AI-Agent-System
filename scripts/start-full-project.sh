@@ -75,6 +75,21 @@ docker-compose up -d director-mcp-server
 echo -e "${BLUE}   Starting n8n AI Workflow Platform...${NC}"
 docker-compose up -d n8n
 
+# Configure workflows for production environment
+echo -e "${BLUE}🔧 Configuring workflows for production environment...${NC}"
+if [ -f "./n8n/workflows/config/config-switcher.js" ]; then
+    cd n8n/workflows/config
+    echo -e "${YELLOW}   Switching all workflows to production configuration...${NC}"
+    if node config-switcher.js --env production --all; then
+        echo -e "${GREEN}   ✅ All workflows configured for production (Docker service URLs)${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️  Warning: Some workflows may not have been configured${NC}"
+    fi
+    cd ../../..
+else
+    echo -e "${YELLOW}   ⚠️  Config switcher not found, workflows may need manual configuration${NC}"
+fi
+
 # Wait for services to be ready
 echo -e "${YELLOW}⏳ Waiting for services to start...${NC}"
 sleep 5

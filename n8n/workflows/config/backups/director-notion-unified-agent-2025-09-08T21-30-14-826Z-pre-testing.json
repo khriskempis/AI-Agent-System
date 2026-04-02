@@ -1,0 +1,661 @@
+{
+  "name": "Director + Notion Unified Agent Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Start Workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "workflow-context",
+              "name": "workflowContext",
+              "value": {
+                "sessionId": "={{ $now.toISOString() }}",
+                "workflowType": "unified_director_notion_workflow",
+                "startTime": "={{ new Date().toISOString() }}",
+                "currentPhase": "initialization",
+                "sourceDatabase": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
+                "targetDatabases": {
+                  "projects": "3cd8ea052d6d4b69956e89b1184cae75",
+                  "knowledge": "263d7be3dbcd80c0b6e4fd309a8af453",
+                  "journal": "a1d35f6081a044589425512cb9d136b7"
+                },
+                "limit": 3
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "setup-context",
+      "name": "Initialize Workflow Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://mcp-director-server-http-dev:3002/api/mcp/get-workflow-template",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  'workflow_type': 'idea_categorization',\n  'parameters': {\n    'source_database_id': $json.workflowContext.sourceDatabase,\n    'limit': $json.workflowContext.limit\n  }\n} }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "get-phase1-template",
+      "name": "Director: Get Phase 1 Template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://mcp-director-server-http-dev:3002/api/mcp/create-agent-instructions",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  'workflow_type': 'idea_categorization',\n  'target_agent': 'notion',\n  'parameters': {\n    'source_database_id': $('Initialize Workflow Context').first().json.workflowContext.sourceDatabase,\n    'limit': $('Initialize Workflow Context').first().json.workflowContext.limit,\n    'target_databases': $('Initialize Workflow Context').first().json.workflowContext.targetDatabases\n  },\n  'focus_areas': ['categorization', 'multi_idea_parsing']\n} }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "create-phase1-instructions",
+      "name": "Director: Create Phase 1 Instructions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Phase 1 Instructions\nconst directorResponse = $json;\nconst workflowContext = $('Initialize Workflow Context').first().json.workflowContext;\n\nconst instructionData = directorResponse.data;\n\nif (!instructionData || !instructionData.instruction) {\n  return [{\n    instructionText: \"Error: No valid Phase 1 instructions received\",\n    error: true,\n    task_id: \"phase1_error\"\n  }];\n}\n\nconst instruction = instructionData.instruction;\n\nlet instructionText = '';\ninstructionText += `# PHASE 1: IDEA CATEGORIZATION\\n\\n`;\ninstructionText += `## WORKFLOW CONTEXT\\n`;\ninstructionText += `- Session ID: ${workflowContext.sessionId}\\n`;\ninstructionText += `- Source Database: ${workflowContext.sourceDatabase}\\n`;\ninstructionText += `- Limit: ${workflowContext.limit} ideas\\n\\n`;\n\ninstructionText += `## OBJECTIVE\\n`;\ninstructionText += `${instruction.objective}\\n\\n`;\n\ninstructionText += `## CATEGORIZATION RULES\\n`;\ninstructionText += `- **Projects**: ${workflowContext.targetDatabases.projects}\\n`;\ninstructionText += `- **Knowledge**: ${workflowContext.targetDatabases.knowledge}\\n`;\ninstructionText += `- **Journal**: ${workflowContext.targetDatabases.journal}\\n\\n`;\n\ninstructionText += `## EXECUTION PLAN\\n`;\ninstructionText += `1. Get ideas from source database\\n`;\ninstructionText += `2. Parse and categorize each idea\\n`;\ninstructionText += `3. Return categorization results\\n\\n`;\n\ninstructionText += `## REQUIRED OUTPUT FORMAT\\n`;\ninstructionText += `Return JSON with ideas_processed array containing categorization for each idea.\\n`;\n\nreturn [{\n  instructionText,\n  task_id: instructionData.task_id,\n  phase: 'phase1_categorization',\n  workflowContext\n}];"
+      },
+      "id": "parse-phase1-instructions",
+      "name": "Parse Phase 1 Instructions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.instructionText }}",
+        "hasOutputParser": false,
+        "agent": "toolsAgent",
+        "options": {
+          "systemMessage": "You are the Notion Agent executing Director instructions.\\n\\n# EXECUTION APPROACH\\n1. Read the task objective and requirements carefully\\n2. Use the provided methodology and rules to execute the task\\n3. Apply all specified validation and processing rules\\n4. Use the required MCP tools as instructed\\n5. Return results in the specified JSON format\\n\\n# RESPONSE FORMAT\\nReturn ONLY JSON in this exact structure:\\n{\\n  \"agent_id\": \"notion\",\\n  \"task_id\": \"{{ $json.task_id || 'workflow_task' }}\",\\n  \"phase\": \"{{ $json.phase }}_complete\",\\n  \"timestamp\": \"ISO_timestamp\",\\n  \"execution_time_ms\": number,\\n  \"results\": {\\n    // Task-specific results based on task type\\n    // For categorization: ideas_processed array with categorization analysis\\n    // For database_updates: operations_completed array with success/failure status\\n  },\\n  \"status\": {\\n    \"success\": boolean,\\n    \"errors\": [],\\n    \"next_phase\": \"string\"\\n  },\\n  \"context_updates\": {\\n    \"api_calls\": number,\\n    \"tools_used\": [],\\n    \"performance_notes\": \"string\"\\n  }\\n}\\n\\n**CRITICAL: Output only valid JSON. No explanations or summaries. Focus solely on the task described in the instructions.**",
+          "maxIterations": 15
+        }
+      },
+      "id": "notion-unified-agent",
+      "name": "Notion Agent (Unified)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        1340,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if this is Phase 1 complete and prepare for Phase 2\nconst agentOutput = $json;\nconst workflowContext = $('Parse Phase 1 Instructions').first().json.workflowContext;\n\n// Parse agent results\nlet agentResults;\ntry {\n  const outputText = agentOutput.output || agentOutput.text || JSON.stringify(agentOutput);\n  const jsonMatch = outputText.match(/\\{[\\s\\S]*\\}/);\n  \n  if (jsonMatch) {\n    agentResults = JSON.parse(jsonMatch[0]);\n  } else {\n    throw new Error('No JSON found in agent output');\n  }\n} catch (error) {\n  console.error('Error parsing agent results:', error.message);\n  agentResults = {\n    error: error.message,\n    status: { success: false, next_phase: 'error' }\n  };\n}\n\n// Check if this was Phase 1 (categorization)\nif (agentResults.phase === 'phase1_categorization_complete') {\n  // This is Phase 1 complete, prepare Phase 2 instructions\n  const categorizedIdeas = agentResults.results?.ideas_processed || [];\n  \n  // Prepare Phase 2 context\n  const phase2Context = {\n    sessionId: workflowContext.sessionId,\n    phase1Results: agentResults,\n    categorizedIdeas,\n    targetDatabases: workflowContext.targetDatabases,\n    phase: 'phase2_preparation'\n  };\n  \n  return [{\n    phase2Ready: true,\n    phase1Complete: true,\n    phase2Context,\n    categorizedIdeas,\n    nextAction: 'prepare_phase2'\n  }];\n} else if (agentResults.phase === 'phase2_database_creation_complete') {\n  // This is Phase 2 complete, workflow finished\n  return [{\n    workflowComplete: true,\n    phase1Results: agentResults.phase1_summary || {},\n    phase2Results: agentResults.results || {},\n    finalStatus: agentResults.status || { success: false },\n    nextAction: 'workflow_complete'\n  }];\n} else {\n  // Unknown phase or error\n  return [{\n    error: true,\n    message: `Unknown phase: ${agentResults.phase}`,\n    agentOutput: agentResults,\n    nextAction: 'error_review'\n  }];\n}"
+      },
+      "id": "workflow-controller",
+      "name": "🔄 Workflow Controller",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.nextAction }}",
+              "operation": "equal",
+              "value2": "prepare_phase2"
+            }
+          ]
+        }
+      },
+      "id": "check-next-action",
+      "name": "Check Next Action",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://mcp-director-server-http-dev:3002/api/mcp/get-workflow-template",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  'workflow_type': 'database_item_creation',\n  'parameters': {\n    'categorized_ideas': $json.categorizedIdeas,\n    'target_databases': $json.phase2Context.targetDatabases\n  }\n} }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "get-phase2-template",
+      "name": "Director: Get Phase 2 Template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://mcp-director-server-http-dev:3002/api/mcp/create-agent-instructions",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  'workflow_type': 'database_item_creation',\n  'target_agent': 'notion',\n  'parameters': {\n    'categorized_ideas': $('🔄 Workflow Controller').first().json.categorizedIdeas,\n    'target_databases': $('🔄 Workflow Controller').first().json.phase2Context.targetDatabases\n  },\n  'focus_areas': ['database_creation', 'item_creation']\n} }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "create-phase2-instructions",
+      "name": "Director: Create Phase 2 Instructions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Phase 2 Instructions\nconst directorResponse = $json;\nconst phase2Context = $('🔄 Workflow Controller').first().json.phase2Context;\n\nconst instructionData = directorResponse.data;\n\nif (!instructionData || !instructionData.instruction) {\n  return [{\n    instructionText: \"Error: No valid Phase 2 instructions received\",\n    error: true,\n    task_id: \"phase2_error\"\n  }];\n}\n\nconst instruction = instructionData.instruction;\nconst categorizedIdeas = phase2Context.categorizedIdeas || [];\n\nlet instructionText = '';\ninstructionText += `# PHASE 2: DATABASE ITEM CREATION\\n\\n`;\ninstructionText += `## WORKFLOW STATUS\\n`;\ninstructionText += `- ✅ Phase 1: Categorization Complete (${categorizedIdeas.length} ideas processed)\\n`;\ninstructionText += `- 🔄 Phase 2: Database Creation In Progress\\n`;\ninstructionText += `- Session ID: ${phase2Context.sessionId}\\n\\n`;\n\ninstructionText += `## OBJECTIVE\\n`;\ninstructionText += `${instruction.objective}\\n\\n`;\n\ninstructionText += `## TARGET DATABASES\\n`;\nObject.entries(phase2Context.targetDatabases).forEach(([type, id]) => {\n  const count = categorizedIdeas.filter(i => i.categorization?.database === type).length;\n  instructionText += `- **${type.toUpperCase()}** (${id}): ${count} items to create\\n`;\n});\ninstructionText += '\\n';\n\ninstructionText += `## CATEGORIZED IDEAS TO CREATE\\n`;\ncategorizedIdeas.forEach((idea, index) => {\n  if (idea.categorization) {\n    instructionText += `### ${index + 1}. ${idea.title}\\n`;\n    instructionText += `- **Target**: ${idea.categorization.database}\\n`;\n    instructionText += `- **Category**: ${idea.categorization.category || 'Not specified'}\\n`;\n    instructionText += `- **Priority**: ${idea.categorization.priority || 'Medium'}\\n`;\n    instructionText += `- **Tags**: [${(idea.categorization.tags || []).join(', ')}]\\n\\n`;\n  }\n});\n\ninstructionText += `## EXECUTION PLAN\\n`;\ninstructionText += `1. For each categorized idea:\\n`;\ninstructionText += `   - Get database schema for target database\\n`;\ninstructionText += `   - Create database item with proper properties\\n`;\ninstructionText += `   - Verify creation success\\n`;\ninstructionText += `2. Return complete results\\n\\n`;\n\ninstructionText += `## REQUIRED OUTPUT FORMAT\\n`;\ninstructionText += `Return JSON with operations_completed array and summary.\\n`;\n\nreturn [{\n  instructionText,\n  task_id: instructionData.task_id,\n  phase: 'phase2_database_creation',\n  categorizedIdeas,\n  targetDatabases: phase2Context.targetDatabases\n}];"
+      },
+      "id": "parse-phase2-instructions",
+      "name": "Parse Phase 2 Instructions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "phase2-ready",
+              "name": "phase2Instructions",
+              "value": "={{ $json }}",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "prepare-phase2",
+      "name": "Prepare Phase 2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2660,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final Results Analysis\nconst workflowResults = $json;\nconst workflowContext = $('Initialize Workflow Context').first().json.workflowContext;\n\nconst startTime = new Date(workflowContext.startTime);\nconst endTime = new Date();\nconst totalDuration = endTime.getTime() - startTime.getTime();\n\nlet analysis = {};\n\nif (workflowResults.workflowComplete) {\n  analysis = {\n    status: 'SUCCESS',\n    workflow_complete: true,\n    session_id: workflowContext.sessionId,\n    total_duration_ms: totalDuration,\n    phase1_results: workflowResults.phase1Results,\n    phase2_results: workflowResults.phase2Results,\n    final_status: workflowResults.finalStatus,\n    summary: {\n      ideas_processed: workflowResults.phase1Results?.results?.ideas_processed?.length || 0,\n      database_items_created: workflowResults.phase2Results?.operations_completed?.length || 0,\n      success_rate: workflowResults.finalStatus?.success ? '100%' : 'Partial'\n    }\n  };\n} else if (workflowResults.error) {\n  analysis = {\n    status: 'ERROR',\n    workflow_complete: false,\n    session_id: workflowContext.sessionId,\n    total_duration_ms: totalDuration,\n    error_message: workflowResults.message,\n    debug_info: workflowResults.agentOutput\n  };\n} else {\n  analysis = {\n    status: 'UNKNOWN',\n    workflow_complete: false,\n    session_id: workflowContext.sessionId,\n    total_duration_ms: totalDuration,\n    raw_results: workflowResults\n  };\n}\n\nreturn [analysis];"
+      },
+      "id": "final-analysis",
+      "name": "📊 Final Workflow Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get ideas from Notion database for categorization",
+        "method": "GET",
+        "url": "http://mcp-notion-idea-server-http-dev:3001/api/ideas?limit={limit}&status={status}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "limit",
+              "description": "Number of ideas to retrieve (default: 10)"
+            },
+            {
+              "name": "status",
+              "description": "Status filter: 'Not Started', 'In Progress', 'Done'"
+            }
+          ]
+        }
+      },
+      "id": "get-ideas-tool",
+      "name": "Get Ideas for Processing",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get specific idea by ID for detailed analysis",
+        "method": "GET",
+        "url": "http://mcp-notion-idea-server-http-dev:3001/api/ideas/{idea_id}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "idea_id",
+              "description": "The ID of the specific idea to retrieve"
+            }
+          ]
+        }
+      },
+      "id": "get-idea-by-id-tool",
+      "name": "Get Idea By ID",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Update idea status and tags",
+        "method": "PUT",
+        "url": "http://mcp-notion-idea-server-http-dev:3001/api/ideas/{idea_id}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"{status}\",\n  \"tags\": [\"{tags}\"]\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "idea_id",
+              "description": "The ID of the idea to update"
+            },
+            {
+              "name": "status",
+              "description": "New status: 'Not Started', 'In Progress', 'Done'"
+            },
+            {
+              "name": "tags",
+              "description": "Single tag to add to the idea (if multiple tags needed, call tool multiple times)"
+            }
+          ]
+        }
+      },
+      "id": "update-idea-tool",
+      "name": "Update Idea Status",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get database schema for proper item creation",
+        "method": "GET",
+        "url": "http://mcp-notion-idea-server-http-dev:3001/api/databases/{database_id}/schema",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "database_id",
+              "description": "Database ID to get schema for"
+            }
+          ]
+        }
+      },
+      "id": "get-schema-tool",
+      "name": "Get Database Schema",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Create new database item from categorized idea",
+        "method": "POST",
+        "url": "http://mcp-notion-idea-server-http-dev:3001/api/databases/{database_id}/pages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{properties}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "database_id",
+              "description": "Target database ID"
+            },
+            {
+              "name": "properties",
+              "description": "JSON properties object based on database schema"
+            }
+          ]
+        }
+      },
+      "id": "create-item-tool",
+      "name": "Create Database Item",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Verify database item creation by getting recent items",
+        "method": "GET",
+        "url": "http://mcp-notion-idea-server-http-dev:3001/api/databases/{database_id}/pages?limit={limit}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "database_id",
+              "description": "Database ID to verify"
+            },
+            {
+              "name": "limit",
+              "description": "Number of recent items to get (default: 5)"
+            }
+          ]
+        }
+      },
+      "id": "verify-creation-tool",
+      "name": "Verify Database Creation",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 4000
+        }
+      },
+      "id": "openai-model",
+      "name": "OpenAI Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        120
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "1",
+          "name": "OpenAI API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Start Workflow": {
+      "main": [
+        [
+          {
+            "node": "Initialize Workflow Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Workflow Context": {
+      "main": [
+        [
+          {
+            "node": "Director: Get Phase 1 Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Director: Get Phase 1 Template": {
+      "main": [
+        [
+          {
+            "node": "Director: Create Phase 1 Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Director: Create Phase 1 Instructions": {
+      "main": [
+        [
+          {
+            "node": "Parse Phase 1 Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Phase 1 Instructions": {
+      "main": [
+        [
+          {
+            "node": "Notion Agent (Unified)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Agent (Unified)": {
+      "main": [
+        [
+          {
+            "node": "🔄 Workflow Controller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Workflow Controller": {
+      "main": [
+        [
+          {
+            "node": "Check Next Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Next Action": {
+      "main": [
+        [
+          {
+            "node": "Director: Get Phase 2 Template",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📊 Final Workflow Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Director: Get Phase 2 Template": {
+      "main": [
+        [
+          {
+            "node": "Director: Create Phase 2 Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Director: Create Phase 2 Instructions": {
+      "main": [
+        [
+          {
+            "node": "Parse Phase 2 Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Phase 2 Instructions": {
+      "main": [
+        [
+          {
+            "node": "Prepare Phase 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Phase 2": {
+      "main": [
+        [
+          {
+            "node": "Notion Agent (Unified)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Ideas for Processing": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Unified)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Idea By ID": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Unified)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Idea Status": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Unified)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Database Schema": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Unified)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Database Item": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Unified)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Database Creation": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Unified)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Notion Agent (Unified)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    "env:testing_environment"
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-09-08T21:20:53.608Z",
+  "versionId": "1"
+}

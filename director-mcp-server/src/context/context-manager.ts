@@ -4,7 +4,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.js';
 import {
   SharedWorkflowContext,
   AgentToDirectorResponse,
@@ -13,7 +13,7 @@ import {
   PerformanceMetrics,
   ErrorEntry,
   MCPToolResult
-} from '../types/workflow';
+} from '../types/workflow.js';
 
 export class ContextManager {
   private contexts: Map<string, SharedWorkflowContext> = new Map();
@@ -397,6 +397,89 @@ export class ContextManager {
     });
 
     return results;
+  }
+
+  /**
+   * Update Context with new data
+   */
+  async updateContext(contextId: string, updateData: {
+    phase?: string;
+    agent_response?: any;
+    workflow_data?: any;
+    timestamp?: string;
+  }): Promise<any> {
+    const context = this.contexts.get(contextId);
+    
+    if (!context) {
+      // Create a new context if it doesn't exist
+      const newContext: SharedWorkflowContext = {
+        context_id: contextId,
+        workflow_id: 'phase2_workflow',
+        current_phase: updateData.phase || 'database_creation',
+        iteration: 1,
+        started_at: new Date().toISOString(),
+        updated_at: updateData.timestamp || new Date().toISOString(),
+        phase_results: {},
+        workflow_state: {
+          databases_involved: [],
+          total_operations: 0,
+          error_count: 0,
+          current_agents: [],
+          pending_tasks: []
+        },
+        performance_metrics: {
+          total_execution_time_ms: 0,
+          api_calls_total: 0,
+          token_usage_estimate: 0,
+          agent_response_times: {},
+          bottlenecks: []
+        },
+        error_log: []
+      };
+      
+      this.contexts.set(contextId, newContext);
+      logger.info(`Created new context: ${contextId}`);
+    }
+
+    const existingContext = this.contexts.get(contextId)!;
+    
+    // Update context with new data
+    if (updateData.phase) {
+      existingContext.current_phase = updateData.phase;
+    }
+    
+    if (updateData.agent_response) {
+      // Store agent response in phase results
+      const phaseKey = updateData.phase || existingContext.current_phase;
+      existingContext.phase_results[phaseKey] = {
+        agent: updateData.agent_response.agent_id || 'unknown',
+        completed_at: updateData.timestamp || new Date().toISOString(),
+        status: updateData.agent_response.status?.success ? 'success' : 'failed',
+        execution_time_ms: updateData.agent_response.execution_time_ms || 0,
+        results_summary: updateData.agent_response.results || {},
+        next_action: updateData.agent_response.status?.next_phase || 'continue',
+        error_details: updateData.agent_response.status?.errors?.join(', ')
+      };
+    }
+    
+    if (updateData.workflow_data) {
+      // Store workflow data in the context
+      existingContext.workflow_state = {
+        ...existingContext.workflow_state,
+        ...updateData.workflow_data
+      };
+    }
+    
+    existingContext.updated_at = updateData.timestamp || new Date().toISOString();
+    
+    logger.info(`Updated context ${contextId} for phase: ${updateData.phase}`);
+    
+    return {
+      context_id: contextId,
+      updated_at: existingContext.updated_at,
+      current_phase: existingContext.current_phase,
+      success: true
+    };
   }
 
   /**

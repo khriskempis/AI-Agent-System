@@ -1,0 +1,451 @@
+{
+  "name": "Multi-Agent Workflow System (Updated with Director MCP)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "1",
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "system-context",
+              "name": "systemContext",
+              "value": {
+                "sessionId": "={{ $now.toISOString() }}",
+                "workflowType": "multi_agent_director_system",
+                "startTime": "={{ new Date().toISOString() }}",
+                "analysisDate": "={{ new Date().toDateString() }}",
+                "agentsAvailable": [
+                  "notion",
+                  "planner",
+                  "validation"
+                ],
+                "sharedData": {},
+                "executionHistory": [],
+                "currentPhase": "initialization",
+                "iteration": 1,
+                "mcpConfig": {
+                  "workflow_type": "idea_categorization",
+                  "source_database_id": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
+                  "limit": 5,
+                  "target_agent": "notion"
+                }
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "2",
+      "name": "Initialize Multi-Agent Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3002/api/mcp/get-workflow-template",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  'workflow_type': $json.systemContext.mcpConfig.workflow_type,\n  'parameters': {\n    'source_database_id': $json.systemContext.mcpConfig.source_database_id,\n    'limit': $json.systemContext.mcpConfig.limit\n  }\n} }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "3",
+      "name": "Director: Get Workflow Template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3002/api/mcp/create-agent-instructions",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  'workflow_type': $('Initialize Multi-Agent Context').item.json.systemContext.mcpConfig.workflow_type,\n  'target_agent': $('Initialize Multi-Agent Context').item.json.systemContext.mcpConfig.target_agent,\n  'parameters': {\n    'source_database_id': $('Initialize Multi-Agent Context').item.json.systemContext.mcpConfig.source_database_id,\n    'limit': $('Initialize Multi-Agent Context').item.json.systemContext.mcpConfig.limit\n  }\n} }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "4",
+      "name": "Director: Create Agent Instructions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Director MCP Instructions for Multi-Agent System\nconst directorResponse = $json;\nconst systemContext = $('Initialize Multi-Agent Context').first().json.systemContext;\n\n// Extract instruction data\nconst instructionData = directorResponse.data;\n\nif (!instructionData || !instructionData.instruction) {\n  return [{\n    instructionText: \"Error: No valid instructions received from Director MCP Server\",\n    error: true,\n    task_id: \"error_task\",\n    agentType: \"notion\"\n  }];\n}\n\n// Build comprehensive instruction text for the target agent\nconst instruction = instructionData.instruction;\nlet instructionText = '';\n\n// Add task header with multi-agent context\ninstructionText += `# MULTI-AGENT SYSTEM TASK: ${instruction.task_type?.toUpperCase() || 'IDEA_PROCESSING'}\\n\\n`;\n\n// Add system context\ninstructionText += `## SYSTEM CONTEXT\\n`;\ninstructionText += `- Session ID: ${systemContext.sessionId}\\n`;\ninstructionText += `- Workflow Type: ${systemContext.workflowType}\\n`;\ninstructionText += `- Current Phase: ${systemContext.currentPhase}\\n`;\ninstructionText += `- Available Agents: ${systemContext.agentsAvailable.join(', ')}\\n\\n`;\n\n// Add objective\nif (instruction.objective) {\n  instructionText += `## PRIMARY OBJECTIVE\\n${instruction.objective}\\n\\n`;\n}\n\n// Add task parameters\nif (instruction.parameters) {\n  instructionText += `## TASK PARAMETERS\\n`;\n  Object.entries(instruction.parameters).forEach(([key, value]) => {\n    instructionText += `- ${key}: ${value}\\n`;\n  });\n  instructionText += '\\n';\n}\n\n// Add categorization methodology for idea processing\nif (instructionData.categorization_methodology) {\n  instructionText += `## MULTI-IDEA CATEGORIZATION METHODOLOGY\\n`;\n  \n  if (instructionData.categorization_methodology.multi_idea_parsing_rules) {\n    instructionText += `### PARSING RULES:\\n`;\n    instructionData.categorization_methodology.multi_idea_parsing_rules.forEach(rule => {\n      instructionText += `- ${rule}\\n`;\n    });\n    instructionText += '\\n';\n  }\n  \n  if (instructionData.categorization_methodology.database_routing_criteria) {\n    instructionText += `### DATABASE ROUTING CRITERIA:\\n`;\n    Object.entries(instructionData.categorization_methodology.database_routing_criteria).forEach(([key, criteria]) => {\n      instructionText += `**${key.toUpperCase()}:**\\n`;\n      if (criteria.description) instructionText += `- Description: ${criteria.description}\\n`;\n      if (criteria.keywords) instructionText += `- Keywords: ${criteria.keywords.join(', ')}\\n`;\n      if (criteria.criteria) instructionText += `- Criteria: ${criteria.criteria}\\n`;\n      instructionText += '\\n';\n    });\n  }\n  \n  if (instructionData.categorization_methodology.analysis_requirements) {\n    instructionText += `### ANALYSIS REQUIREMENTS:\\n`;\n    Object.entries(instructionData.categorization_methodology.analysis_requirements).forEach(([key, requirement]) => {\n      instructionText += `- **${key.replace(/_/g, ' ').toUpperCase()}**: ${requirement}\\n`;\n    });\n    instructionText += '\\n';\n  }\n}\n\n// Add execution requirements\nif (instructionData.execution_requirements) {\n  instructionText += `## EXECUTION REQUIREMENTS\\n`;\n  if (instructionData.execution_requirements.required_tools) {\n    instructionText += `### REQUIRED TOOLS:\\n`;\n    instructionData.execution_requirements.required_tools.forEach(tool => {\n      instructionText += `- ${tool}\\n`;\n    });\n  }\n  if (instructionData.execution_requirements.response_format) {\n    instructionText += `### RESPONSE FORMAT:\\n${instructionData.execution_requirements.response_format}\\n`;\n  }\n  if (instructionData.execution_requirements.processing_approach) {\n    instructionText += `### PROCESSING APPROACH:\\n${instructionData.execution_requirements.processing_approach}\\n`;\n  }\n  instructionText += '\\n';\n}\n\n// Add multi-agent coordination instructions\ninstructionText += `## MULTI-AGENT COORDINATION\\n`;\ninstructionText += `You are part of a multi-agent system. After completing your task:\\n`;\ninstructionText += `1. Return results in the standardized format\\n`;\ninstructionText += `2. Include execution metadata for the next agent\\n`;\ninstructionText += `3. Set status indicators for workflow coordination\\n\\n`;\n\n// Add execution steps\ninstructionText += `## EXECUTION STEPS\\n`;\ninstructionText += `1. **Initialize**: Set up task context and parameters\\n`;\ninstructionText += `2. **Retrieve Data**: Use get_ideas tool with limit=${instruction.parameters?.limit || 5}\\n`;\ninstructionText += `3. **Process**: Apply multi-idea parsing and categorization\\n`;\ninstructionText += `4. **Update**: Mark processed items as 'Done'\\n`;\ninstructionText += `5. **Report**: Return comprehensive results for multi-agent coordination\\n\\n`;\n\n// Add expected output format\ninstructionText += `## EXPECTED OUTPUT FORMAT\\n`;\ninstructionText += `Return results as JSON with multi-agent metadata:\\n`;\ninstructionText += `{\\n`;\ninstructionText += `  \"agent_id\": \"${instructionData.agent_id}\",\\n`;\ninstructionText += `  \"task_id\": \"${instructionData.task_id}\",\\n`;\ninstructionText += `  \"phase\": \"${systemContext.currentPhase}\",\\n`;\ninstructionText += `  \"timestamp\": \"ISO timestamp\",\\n`;\ninstructionText += `  \"execution_time_ms\": \"execution duration\",\\n`;\ninstructionText += `  \"results\": {\\n`;\ninstructionText += `    \"ideas_processed\": [array of processed ideas],\\n`;\ninstructionText += `    \"operations_completed\": [array of operations],\\n`;\ninstructionText += `    \"summary\": {\\n`;\ninstructionText += `      \"total_processed\": number,\\n`;\ninstructionText += `      \"successful\": number,\\n`;\ninstructionText += `      \"failed\": number,\\n`;\ninstructionText += `      \"projects\": number,\\n`;\ninstructionText += `      \"knowledge\": number,\\n`;\ninstructionText += `      \"journal\": number\\n`;\ninstructionText += `    }\\n`;\ninstructionText += `  },\\n`;\ninstructionText += `  \"status\": {\\n`;\ninstructionText += `    \"success\": boolean,\\n`;\ninstructionText += `    \"errors\": [array of errors],\\n`;\ninstructionText += `    \"next_phase\": \"validation_required|workflow_complete\"\\n`;\ninstructionText += `  },\\n`;\ninstructionText += `  \"context_updates\": {\\n`;\ninstructionText += `    \"api_calls\": number,\\n`;\ninstructionText += `    \"tools_used\": [array of tools],\\n`;\ninstructionText += `    \"performance_notes\": \"string\"\\n`;\ninstructionText += `  }\\n`;\ninstructionText += `}\\n\\n`;\n\ninstructionText += `**BEGIN MULTI-AGENT EXECUTION NOW**\\n`;\n\n// Update system context with agent task\nsystemContext.currentPhase = 'agent_execution';\nsystemContext.currentAgent = instructionData.agent_id || 'notion';\nsystemContext.executionHistory.push({\n  iteration: systemContext.iteration,\n  timestamp: new Date().toISOString(),\n  phase: 'director_instructions_parsed',\n  agent: instructionData.agent_id || 'notion',\n  task_id: instructionData.task_id\n});\n\nreturn [{\n  instructionText,\n  task_id: instructionData.task_id,\n  agent_id: instructionData.agent_id || 'notion',\n  agentType: instructionData.agent_id || 'notion',\n  systemContext,\n  directorResponse: instructionData,\n  mcpIntegration: {\n    template_loaded: true,\n    instructions_created: true,\n    ready_for_execution: true\n  }\n}];"
+      },
+      "id": "5",
+      "name": "Parse MCP Instructions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "notion",
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.agentType }}",
+                    "rightValue": "notion"
+                  }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "planner",
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.agentType }}",
+                    "rightValue": "planner"
+                  }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "validation",
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.agentType }}",
+                    "rightValue": "validation"
+                  }
+                ]
+              },
+              "renameOutput": true
+            }
+          ]
+        }
+      },
+      "id": "6",
+      "name": "Route to Agent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1340,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 4000
+        }
+      },
+      "id": "7",
+      "name": "OpenAI Notion Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        200
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "1",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.instructionText }}",
+        "agent": "conversationalAgent",
+        "options": {
+          "systemMessage": "You are a specialized Notion Agent in a multi-agent system with full access to Notion MCP tools. Execute the Director's instructions precisely and return results in the required format for multi-agent coordination.",
+          "maxIterations": 15
+        }
+      },
+      "id": "8",
+      "name": "Notion Agent (Director Orchestrated)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get ideas from Notion database with filtering - core tool for idea processing",
+        "method": "GET",
+        "url": "http://localhost:3001/api/ideas?limit={limit}&filter={filter}&status={status}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "limit",
+              "description": "Number of ideas to retrieve (default: 10, max: 50)"
+            },
+            {
+              "name": "filter",
+              "description": "Optional text search filter"
+            },
+            {
+              "name": "status",
+              "description": "Status filter: 'Not Started', 'In Progress', 'Done'"
+            }
+          ]
+        }
+      },
+      "id": "9",
+      "name": "Notion Get Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Update idea status, content, and tags - REQUIRED after processing",
+        "method": "PUT",
+        "url": "http://localhost:3001/api/ideas/{idea_id}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"status\": \"{status}\", \"content\": \"{content}\", \"tags\": \"{tags}\" } }}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "idea_id",
+              "description": "REQUIRED: ID of the idea to update"
+            },
+            {
+              "name": "status",
+              "description": "REQUIRED: Set to 'Done' after processing"
+            },
+            {
+              "name": "content",
+              "description": "Optional: Updated content"
+            },
+            {
+              "name": "tags",
+              "description": "Optional: Comma-separated tags"
+            }
+          ]
+        }
+      },
+      "id": "10",
+      "name": "Notion Update Idea",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Multi-Agent Results and Update Context\nconst agentOutput = $json;\nconst systemContext = $('Parse MCP Instructions').first().json.systemContext;\n\n// Parse agent output\nlet agentResults;\ntry {\n  const outputText = agentOutput.output || agentOutput.text || JSON.stringify(agentOutput);\n  const jsonMatch = outputText.match(/\\{[\\s\\S]*\\}/);\n  \n  if (jsonMatch) {\n    agentResults = JSON.parse(jsonMatch[0]);\n  } else {\n    // Fallback structure\n    agentResults = {\n      agent_id: systemContext.currentAgent || 'notion',\n      task_id: $('Parse MCP Instructions').first().json.task_id,\n      phase: systemContext.currentPhase,\n      timestamp: new Date().toISOString(),\n      execution_time_ms: Date.now() - new Date(systemContext.startTime).getTime(),\n      results: {\n        ideas_processed: [],\n        summary: { total_processed: 0, successful: 0, failed: 0 }\n      },\n      status: {\n        success: true,\n        errors: [],\n        next_phase: 'workflow_complete'\n      }\n    };\n  }\n} catch (error) {\n  agentResults = {\n    agent_id: systemContext.currentAgent || 'notion',\n    task_id: 'error_task',\n    phase: 'error',\n    timestamp: new Date().toISOString(),\n    error: error.message,\n    status: { success: false, errors: [error.message] }\n  };\n}\n\n// Update system context with results\nsystemContext.executionHistory.push({\n  iteration: systemContext.iteration,\n  timestamp: new Date().toISOString(),\n  phase: 'agent_completed',\n  agent: agentResults.agent_id,\n  results_summary: agentResults.results?.summary || {},\n  success: agentResults.status?.success || false\n});\n\n// Determine next phase\nlet nextPhase = 'workflow_complete';\nif (agentResults.status?.next_phase === 'validation_required') {\n  nextPhase = 'validation';\n} else if (agentResults.results?.summary?.failed > 0) {\n  nextPhase = 'error_review';\n}\n\nsystemContext.currentPhase = nextPhase;\nsystemContext.iteration += 1;\n\n// Calculate performance metrics\nconst totalExecutionTime = Date.now() - new Date(systemContext.startTime).getTime();\nconst performanceMetrics = {\n  total_execution_time_ms: totalExecutionTime,\n  ideas_processed: agentResults.results?.ideas_processed?.length || 0,\n  success_rate: agentResults.results?.summary?.successful / (agentResults.results?.summary?.total_processed || 1),\n  agent_performance: {\n    agent_id: agentResults.agent_id,\n    execution_time: agentResults.execution_time_ms,\n    api_calls: agentResults.context_updates?.api_calls || 0\n  }\n};\n\nreturn [{\n  multiAgentResults: {\n    workflow_complete: nextPhase === 'workflow_complete',\n    agent_results: agentResults,\n    system_context: systemContext,\n    performance_metrics: performanceMetrics,\n    next_phase: nextPhase,\n    timestamp: new Date().toISOString()\n  },\n  summary: {\n    total_ideas_processed: agentResults.results?.ideas_processed?.length || 0,\n    projects_created: agentResults.results?.summary?.projects || 0,\n    knowledge_entries: agentResults.results?.summary?.knowledge || 0,\n    journal_entries: agentResults.results?.summary?.journal || 0,\n    execution_time_ms: totalExecutionTime,\n    success: agentResults.status?.success || false\n  },\n  rawAgentOutput: outputText || 'No output captured'\n}];"
+      },
+      "id": "11",
+      "name": "Process Multi-Agent Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "Initialize Multi-Agent Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Multi-Agent Context": {
+      "main": [
+        [
+          {
+            "node": "Director: Get Workflow Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Director: Get Workflow Template": {
+      "main": [
+        [
+          {
+            "node": "Director: Create Agent Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Director: Create Agent Instructions": {
+      "main": [
+        [
+          {
+            "node": "Parse MCP Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse MCP Instructions": {
+      "main": [
+        [
+          {
+            "node": "Route to Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route to Agent": {
+      "main": [
+        [
+          {
+            "node": "Notion Agent (Director Orchestrated)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        []
+      ]
+    },
+    "OpenAI Notion Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Notion Agent (Director Orchestrated)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Agent (Director Orchestrated)": {
+      "main": [
+        [
+          {
+            "node": "Process Multi-Agent Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Get Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Director Orchestrated)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Update Idea": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent (Director Orchestrated)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    "env:testing_environment"
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-09-08T20:18:00.781Z",
+  "versionId": "1"
+}

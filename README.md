@@ -12,14 +12,23 @@ An intelligent system for processing and managing ideas using Notion and n8n wor
 MCP Server/
 ├── docs/                        # 📚 Organized documentation
 │   ├── setup/                   # Setup and configuration guides
-│   ├── troubleshooting/         # Error fixes and solutions  
+│   ├── troubleshooting/         # Error fixes and solutions
 │   ├── development/             # Development and testing guides
 │   └── archived/                # Historical documents
 ├── notion-idea-server/          # 🖥️ MCP server implementation
-├── n8n/workflows/              # 🤖 AI agent workflows
-│   ├── simplified-intelligent-director.json  # Main workflow
-│   └── examples/               # Working examples and patterns
-└── scripts/                    # 🔧 Docker startup scripts
+├── director-mcp-server/         # 🎯 Director MCP server (workflow orchestration)
+├── orchestrator/                # 🤖 AI pipeline runner (Claude agents + MySQL history)
+│   ├── src/
+│   │   ├── agents/              # Director (classify/evaluate) + Validator agents
+│   │   ├── db/                  # MySQL connection, workflow store, schema.sql
+│   │   ├── pipelines/           # categorize-idea pipeline
+│   │   ├── models/              # Claude API wrapper (ask / askJSON)
+│   │   ├── workflow.ts          # withRetry utility
+│   │   ├── notion-client.ts     # Notion API integration
+│   │   └── index.ts             # CLI entry point
+│   └── env.template             # Environment variable template
+├── n8n/workflows/               # 🔁 n8n automation workflows
+└── scripts/                     # 🔧 Docker startup scripts
 ```
 
 ## 🚀 Quick Start
@@ -36,12 +45,15 @@ MCP Server/
 
 **✅ This starts:**
 - **Main MCP Server** (stdio mode for direct MCP clients)
-- **HTTP API Server** (port 3001 for n8n agents) 
+- **HTTP API Server** (port 3001 for n8n agents)
+- **Director MCP Server** (port 3002 for workflow orchestration)
 - **n8n AI Platform** (port 5678 for workflows)
+- **MySQL** (port 3306 for orchestrator history)
 
 **🌐 Access URLs:**
 - n8n Platform: http://localhost:5678
-- MCP HTTP API: http://localhost:3001
+- Notion MCP HTTP API: http://localhost:3001
+- Director MCP HTTP API: http://localhost:3002
 
 ### **🔧 Development Setup**
 
@@ -57,6 +69,100 @@ MCP Server/
 3. **🔗 Configure n8n**: Use [docs/setup/N8N_SETUP_GUIDE.md](./docs/setup/N8N_SETUP_GUIDE.md)
 4. **🎯 Import Workflow**: Load the main workflow file
 5. **🧪 Test System**: Use the testing configurations
+
+---
+
+## 🤖 Orchestrator — AI Pipeline Runner
+
+The `orchestrator/` directory is a standalone CLI tool that runs multi-agent AI pipelines directly against Claude. It is separate from the n8n workflow system and is designed to be run locally or on a schedule.
+
+### How It Works
+
+Each pipeline runs a sequence of AI agents (Director → Validator → Evaluator) in a feedback loop. Results are written back to Notion. Every execution is tracked in MySQL with a full stage-by-stage audit log.
+
+```
+CLI → Pipeline → FETCH → PARSE → CLASSIFY → VALIDATE → EVALUATE → WRITE
+                                    ↑___________retry loop___________|
+```
+
+### Setup
+
+**1. Start MySQL**
+```bash
+docker compose up mysql -d
+# Schema is auto-loaded on first startup from orchestrator/src/db/schema.sql
+```
+
+**2. Configure environment**
+```bash
+cp orchestrator/env.template orchestrator/.env
+# Fill in:
+#   ANTHROPIC_API_KEY   — your Anthropic key
+#   NOTION_API_URL      — http://localhost:3001 (or the running HTTP server URL)
+#   MYSQL_HOST          — localhost
+#   MYSQL_PASSWORD      — orchestrator (matches docker-compose default)
+```
+
+**3. Install dependencies**
+```bash
+cd orchestrator && npm install
+```
+
+**4. Run a pipeline**
+```bash
+# Process a single Notion page by ID
+npx tsx src/index.ts categorize-idea --id <notion-page-id>
+
+# Process all unprocessed ideas
+npx tsx src/index.ts categorize-idea --all
+
+# Dry run (no writes to Notion or MySQL)
+npx tsx src/index.ts categorize-idea --id <id> --dry-run
+```
+
+### Workflow History (MySQL)
+
+Every run is stored in two tables:
+
+| Table | Purpose |
+|---|---|
+| `workflow_runs` | One row per execution — status, current stage, cached stage outputs |
+| `workflow_events` | Immutable audit log — every stage start/complete/fail with duration |
+
+**Useful queries:**
+```sql
+-- All runs for a Notion page
+SELECT id, status, current_stage, started_at, completed_at
+FROM workflow_runs WHERE notion_page_id = 'your-id';
+
+-- Full audit trail for a run
+SELECT stage, status, attempt, duration_ms, created_at
+FROM workflow_events WHERE run_id = 'your-run-id' ORDER BY id;
+
+-- Recent failures across all runs
+SELECT r.notion_page_name, e.stage, e.error_message, e.created_at
+FROM workflow_events e
+JOIN workflow_runs r ON r.id = e.run_id
+WHERE e.status = 'FAILED'
+ORDER BY e.created_at DESC LIMIT 20;
+
+-- Runs that need manual review
+SELECT notion_page_name, started_at FROM workflow_runs
+WHERE status = 'NEEDS_REVIEW' ORDER BY started_at DESC;
+```
+
+**Connect to MySQL directly:**
+```bash
+docker exec -it orchestrator-mysql mysql -u orchestrator -porchestrator orchestrator
+```
+
+### Key Design Principles
+
+- **Idempotency**: If a run is already `RUNNING` for a Notion page, the pipeline skips it — no duplicate processing.
+- **Activity retries**: Each Claude API call is independently wrapped with `withRetry` (3 attempts, exponential backoff). A single rate-limit error won't fail the whole pipeline.
+- **Graceful degradation**: If `MYSQL_HOST` is not set, all DB calls silently no-op. The pipeline runs normally — you just won't have history.
+
+---
 
 ## 🤖 AI Agent System
 
@@ -100,8 +206,10 @@ MCP Server/
 
 All containers are clearly visible in Docker Desktop:
 - `mcp-notion-idea-server` - Main MCP server (stdio)
-- `mcp-notion-idea-server-http` - HTTP API server
-- `n8n-server` - AI workflow platform
+- `mcp-notion-idea-server-http` - HTTP API server (port 3001)
+- `mcp-director-server-http` - Director MCP HTTP API (port 3002)
+- `n8n-server` - AI workflow platform (port 5678)
+- `orchestrator-mysql` - Workflow history database (port 3306)
 
 ### **Usage Examples**
 
@@ -199,6 +307,6 @@ npm run test:coverage
 
 ---
 
-**Status**: ✅ **Production Ready**  
-**Version**: 1.0 - Multi-Agent Intelligent Director System  
-**Last Updated**: January 2025 
+**Status**: ✅ **Production Ready**
+**Version**: 1.1 - Multi-Agent Orchestrator with MySQL Workflow History
+**Last Updated**: April 2026

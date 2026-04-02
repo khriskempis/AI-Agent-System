@@ -1,0 +1,203 @@
+{
+  "workflow_id": "database_item_creation_v1",
+  "workflow_name": "Database Item Creation from Categorized Ideas",
+  "workflow_type": "database_creation",
+  "version": "1.0.0",
+  "created_date": "2025-09-08",
+  "description": "Create database items in target databases based on categorized ideas from Phase 1",
+  
+  "phases": [
+    {
+      "phase_id": "database_item_creation",
+      "phase_name": "Create Database Items",
+      "sequence": 1,
+      "agent": "notion",
+      "timeout_seconds": 300,
+      "retry_attempts": 2,
+      
+      "agent_instructions": {
+        "task_type": "database_item_creation",
+        "behavior": "Create new database items in target databases based on categorized ideas from Phase 1",
+        "prompt_reference": "notion_agent_creation_prompt_v1",
+        "full_prompt": "You are the Notion Agent executing a database item creation task.\n\n# TASK EXECUTION\nCreate new database items in the appropriate target databases using categorized ideas from Phase 1.\n\n# CREATION PROCESS\n1. **Review Categorized Ideas**: Process the categorized ideas from Phase 1\n2. **Database Routing**: Create items in the correct target database (Projects, Knowledge, Journal)\n3. **Property Mapping**: Map idea properties to database schema\n4. **Content Formatting**: Format content appropriately for each database type\n5. **Tag Application**: Apply relevant tags from the categorization phase\n\n# DATABASE CREATION RULES\n- **Projects Database**: Use 'Name' property for title, include actionable content\n- **Knowledge Database**: Use 'Title' property for title, include reference information\n- **Journal Database**: Use 'Name' property for title, include personal insights\n- **All Databases**: Apply 'Tags' property with categorization tags\n\n# CONTENT FORMATTING\n- **Rich Text Content**: Format content as markdown for proper Notion display\n- **Property Mapping**: Ensure correct property names for each database\n- **Metadata Preservation**: Include original idea metadata where relevant\n\n# EXECUTION REQUIREMENTS\n1. Get categorized ideas from Phase 1 context\n2. For each categorized idea:\n   - Get target database schema\n   - Create database item with proper properties\n   - Verify creation success\n3. Track all creation operations\n4. Return structured JSON results\n\n# OUTPUT REQUIREMENTS\nReturn ONLY JSON in the specified schema. No summaries, explanations, or narrative text.\n\n**CRITICAL: Output only valid JSON matching the expected schema.**",
+        
+        "required_tools": [
+          "get_database_schema",
+          "create_database_page",
+          "verify_database_creation"
+        ],
+        
+        "parameters": {
+          "categorized_ideas": "{{workflow.context.phase1_results.ideas_analyzed}}",
+          "target_databases": "{{workflow.parameters.target_databases}}",
+          "operation_mode": "create_new_items",
+          "content_formatting": {
+            "rich_text": true,
+            "markdown_support": true,
+            "preserve_metadata": true
+          },
+          "property_mappings": {
+            "projects": {
+              "title_property": "Name",
+              "content_property": "content",
+              "tags_property": "Tags"
+            },
+            "knowledge": {
+              "title_property": "Title", 
+              "content_property": "content",
+              "tags_property": "Tags"
+            },
+            "journal": {
+              "title_property": "Name",
+              "content_property": "content", 
+              "tags_property": "Tags"
+            }
+          }
+        },
+        
+        "expected_output_format": "database_creation_results_json",
+        "context_logging": {
+          "log_level": "detailed",
+          "include_api_responses": true,
+          "track_performance": true
+        }
+      },
+      
+      "expected_output_schema": {
+        "type": "object",
+        "required": ["agent", "phase", "timestamp", "operations_completed", "summary", "next_phase"],
+        "properties": {
+          "agent": {"type": "string", "enum": ["notion"]},
+          "phase": {"type": "string", "enum": ["database_creation_complete"]},
+          "timestamp": {"type": "string", "format": "date-time"},
+          "workflow_id": {"type": "string"},
+          "operations_completed": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["original_idea_id", "target_database", "operation_status"],
+              "properties": {
+                "original_idea_id": {"type": "string"},
+                "original_title": {"type": "string"},
+                "target_database": {"type": "string", "enum": ["projects", "knowledge", "journal"]},
+                "target_database_id": {"type": "string"},
+                "created_page_id": {"type": "string"},
+                "operation_status": {"type": "string", "enum": ["success", "failed", "skipped"]},
+                "properties_created": {
+                  "type": "object",
+                  "properties": {
+                    "title": {"type": "string"},
+                    "content": {"type": "string"},
+                    "tags": {"type": "array", "items": {"type": "string"}}
+                  }
+                },
+                "error_message": {"type": "string"},
+                "creation_timestamp": {"type": "string"},
+                "metadata": {
+                  "type": "object",
+                  "properties": {
+                    "content_length": {"type": "number"},
+                    "tags_applied": {"type": "number"},
+                    "rich_content_blocks": {"type": "number"}
+                  }
+                }
+              }
+            }
+          },
+          "summary": {
+            "type": "object",
+            "required": ["total_operations", "successful_creations", "failed_creations"],
+            "properties": {
+              "total_operations": {"type": "number"},
+              "successful_creations": {"type": "number"},
+              "failed_creations": {"type": "number"},
+              "projects_created": {"type": "number"},
+              "knowledge_created": {"type": "number"},
+              "journal_created": {"type": "number"},
+              "processing_time_ms": {"type": "number"},
+              "errors": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          "next_phase": {"type": "string", "enum": ["workflow_complete", "awaiting_cleanup"]},
+          "context_updates": {
+            "type": "object",
+            "properties": {
+              "api_calls_made": {"type": "array"},
+              "performance_metrics": {"type": "object"},
+              "debug_info": {"type": "object"}
+            }
+          }
+        }
+      },
+      
+      "error_handling": {
+        "timeout_action": "return_partial_results",
+        "api_error_action": "log_and_continue",
+        "validation_error_action": "skip_item_and_continue",
+        "required_error_fields": ["error_type", "error_message", "context", "suggested_action"]
+      },
+      
+      "success_criteria": {
+        "minimum_operations_completed": 1,
+        "required_fields_present": ["operations_completed", "summary"],
+        "valid_json_structure": true,
+        "partial_success_acceptable": true
+      }
+    }
+  ],
+  
+  "workflow_context": {
+    "required_database_ids": {
+      "projects": "target database for actionable items",
+      "knowledge": "target database for reference materials", 
+      "journal": "target database for personal insights"
+    },
+    "shared_data_structure": {
+      "creation_results": "array of database creation operations",
+      "performance_metrics": "timing and success rates",
+      "error_log": "any issues encountered",
+      "api_call_log": "detailed API interaction log"
+    },
+    "context_preservation": {
+      "maintain_across_phases": true,
+      "log_all_operations": true,
+      "include_debug_info": true
+    }
+  },
+  
+  "debugging_properties": {
+    "log_level": "verbose",
+    "capture_api_responses": true,
+    "track_token_usage": true,
+    "performance_monitoring": true,
+    "error_stack_traces": true,
+    "validation_checkpoints": [
+      "input_validation",
+      "tool_execution", 
+      "output_formatting",
+      "schema_validation"
+    ]
+  },
+  
+  "mcp_tool_compatibility": {
+    "tool_endpoint": "/api/workflows/templates/database_item_creation",
+    "required_parameters": ["categorized_ideas", "target_databases"],
+    "optional_parameters": ["operation_mode", "content_formatting"],
+    "return_format": "json",
+    "cache_duration": 1800
+  },
+  
+  "validation_schema": {
+    "input_validation": {
+      "required_database_ids": 3,
+      "agent_availability": ["notion"],
+      "tool_accessibility": ["get_database_schema", "create_database_page", "verify_database_creation"]
+    },
+    "output_validation": {
+      "json_structure": "strict",
+      "required_fields": "all",
+      "data_types": "enforce",
+      "enum_values": "validate"
+    }
+  }
+}

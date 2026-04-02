@@ -322,29 +322,36 @@ app.get('/api/databases/:databaseId/schema', async (req, res) => {
   }
 });
 
-// Auto-detect database property mappings
-app.get('/api/databases/:databaseId/auto-config', async (req, res) => {
+// Create new page in any database
+app.post('/api/databases/:databaseId/pages', async (req, res) => {
   try {
     const { databaseId } = req.params;
-    const mappings = await genericNotionService.detectPropertyMappings(databaseId);
+    const { properties, content, children } = req.body;
     
-    const suggestedConfig: DatabaseConfig = {
-      id: databaseId,
-      type: 'generic',
-      propertyMappings: mappings
-    };
+    if (!properties) {
+      return res.status(400).json({
+        success: false,
+        error: 'Properties object is required in request body',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    let contentBlocks = children;
+    
+    // If content is provided as text, convert it to Notion blocks
+    if (content && typeof content === 'string') {
+      contentBlocks = genericNotionService.convertTextToNotionBlocks(content);
+    }
+    
+    const newPage = await genericNotionService.createDatabasePage(databaseId, properties, contentBlocks);
     
     res.json({
       success: true,
-      data: {
-        databaseId,
-        suggestedConfig,
-        propertyMappings: mappings
-      },
+      data: newPage,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error auto-detecting database config:', error);
+    console.error('Error creating database page:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
