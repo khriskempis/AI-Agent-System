@@ -1,0 +1,329 @@
+{
+  "name": "Director + Notion Integration Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "integration-context",
+              "name": "integrationContext",
+              "value": {
+                "sessionId": "={{ $now.toISOString() }}",
+                "workflowType": "director_notion_integration",
+                "startTime": "={{ new Date().toISOString() }}",
+                "testParameters": {
+                  "workflow_type": "idea_categorization",
+                  "source_database_id": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
+                  "limit": 1,
+                  "target_agent": "notion"
+                }
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "setup-context",
+      "name": "Setup Integration Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3002/api/mcp/get-workflow-template",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  'workflow_type': $json.integrationContext.testParameters.workflow_type,\n  'parameters': {\n    'source_database_id': $json.integrationContext.testParameters.source_database_id,\n    'limit': $json.integrationContext.testParameters.limit\n  }\n} }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "get-template",
+      "name": "Director: Get Template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3002/api/mcp/create-agent-instructions",
+        "method": "POST", 
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  'workflow_type': $('Setup Integration Context').item.json.integrationContext.testParameters.workflow_type,\n  'target_agent': $('Setup Integration Context').item.json.integrationContext.testParameters.target_agent,\n  'parameters': {\n    'source_database_id': $('Setup Integration Context').item.json.integrationContext.testParameters.source_database_id,\n    'limit': $('Setup Integration Context').item.json.integrationContext.testParameters.limit\n  },\n  'focus_areas': ['categorization', 'multi_idea_parsing']\n} }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "create-instructions",
+      "name": "Director: Create Instructions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Director Instructions into readable prompt for Notion Agent\nconst directorResponse = $json;\nconst integrationContext = $('Setup Integration Context').first().json.integrationContext;\n\n// Extract the instruction data\nconst instructionData = directorResponse.data;\n\nif (!instructionData || !instructionData.instruction) {\n  return [{\n    instructionText: \"Error: No valid instructions received from Director\",\n    error: true,\n    task_id: \"error_task\"\n  }];\n}\n\n// Build readable instruction text based on task type\nconst instruction = instructionData.instruction;\nlet instructionText = '';\n\n// Add task header\ninstructionText += `# TASK: ${instruction.task_type?.toUpperCase() || 'NOTION_TASK'}\\n\\n`;\n\n// Add objective\nif (instruction.objective) {\n  instructionText += `## OBJECTIVE\\n${instruction.objective}\\n\\n`;\n}\n\n// Add parameters section\nif (instruction.parameters) {\n  instructionText += `## TASK PARAMETERS\\n`;\n  Object.entries(instruction.parameters).forEach(([key, value]) => {\n    instructionText += `- ${key}: ${value}\\n`;\n  });\n  instructionText += '\\n';\n}\n\n// Add categorization methodology if present\nif (instructionData.categorization_methodology) {\n  instructionText += `## CATEGORIZATION METHODOLOGY\\n`;\n  Object.entries(instructionData.categorization_methodology).forEach(([key, value]) => {\n    instructionText += `### ${key.toUpperCase()}\\n`;\n    if (Array.isArray(value)) {\n      value.forEach(item => instructionText += `- ${item}\\n`);\n    } else if (typeof value === 'object') {\n      Object.entries(value).forEach(([subKey, subValue]) => {\n        if (typeof subValue === 'object') {\n          instructionText += `- **${subKey}**: ${JSON.stringify(subValue, null, 2)}\\n`;\n        } else {\n          instructionText += `- **${subKey}**: ${subValue}\\n`;\n        }\n      });\n    } else {\n      instructionText += `${value}\\n`;\n    }\n    instructionText += '\\n';\n  });\n}\n\n// Add execution requirements\nif (instructionData.execution_requirements) {\n  instructionText += `## EXECUTION REQUIREMENTS\\n`;\n  Object.entries(instructionData.execution_requirements).forEach(([key, value]) => {\n    instructionText += `### ${key.replace(/_/g, ' ').toUpperCase()}\\n`;\n    if (Array.isArray(value)) {\n      value.forEach(item => instructionText += `- ${item}\\n`);\n    } else {\n      instructionText += `${value}\\n`;\n    }\n    instructionText += '\\n';\n  });\n}\n\n// Add focus areas if present\nif (instruction.focus_areas && Array.isArray(instruction.focus_areas)) {\n  instructionText += `## FOCUS AREAS\\n`;\n  instruction.focus_areas.forEach(area => {\n    instructionText += `- ${area.replace(/_/g, ' ').toUpperCase()}\\n`;\n  });\n  instructionText += '\\n';\n}\n\n// Add expected output format\ninstructionText += `## EXPECTED OUTPUT\\nReturn results in the specified JSON format with:\\n- agent_id: \"notion\"\\n- task_id: \"${instructionData.task_id}\"\\n- results.ideas_processed: ARRAY of ALL distinct ideas found in the content\\n- Each array entry should have: idea_id, title, original_content_segment, categorization\\n- Status and context updates\\n\\n**EXAMPLE RESULTS STRUCTURE:**\\nresults: {\\n  ideas_processed: [\\n    {\\n      idea_id: same_original_id,\\n      title: AI Video Generator,\\n      original_content_segment: Open source AI video generator...,\\n      categorization: { database: knowledge, tags: [...] }\\n    },\\n    {\\n      idea_id: same_original_id,\\n      title: Google Storybook,\\n      original_content_segment: Google storybook...,\\n      categorization: { database: projects, tags: [...] }\\n    }\\n  ]\\n}\\n\\n`;\n\n// Add final instructions with specific parameters\nlet parametersText = '';\nif (instruction.parameters) {\n  Object.entries(instruction.parameters).forEach(([key, value]) => {\n    parametersText += `${key}=${value} `;\n  });\n}\n\ninstructionText += `## EXECUTION STEPS\\n1. Call get_ideas with limit=1 to retrieve ONE database item\\n2. Read the retrieved content and identify distinct ideas (look for separate topics, links, concepts)\\n3. For each distinct idea found, create a categorization entry\\n4. Call update_idea to set status='Done' for the original database item\\n5. Return JSON with ideas_processed array containing ALL distinct ideas found\\n\\n**KEY POINT:** You will process ONE database item but return MULTIPLE categorized ideas from within that item's content.\\n\\n**BEGIN EXECUTION NOW**`;\n\n// Debug logging\nconsole.log('Parse Director Instructions - Final Output:', {\n  instructionText: instructionText.substring(0, 100) + '...',\n  task_id: instructionData.task_id,\n  task_type: instruction.task_type || 'integration_task',\n  hasInstructionText: !!instructionText,\n  instructionTextLength: instructionText.length\n});\n\nreturn [{\n  instructionText,\n  task_id: instructionData.task_id,\n  task_type: instruction.task_type || 'integration_task',\n  directorResponse: instructionData,\n  integrationContext,\n  debug: {\n    hasInstructionText: !!instructionText,\n    instructionTextLength: instructionText.length,\n    sampleText: instructionText.substring(0, 100)\n  }\n}];"
+      },
+      "id": "parse-instructions",
+      "name": "Parse Director Instructions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 4000
+        }
+      },
+      "id": "openai-notion",
+      "name": "OpenAI Notion Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [1400, 500],
+      "credentials": {
+        "openAiApi": {
+          "id": "1",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.instructionText }}",
+        "hasOutputParser": false,
+        "agent": "toolsAgent",
+        "options": {
+          "systemMessage": "You are the Notion Agent. Follow the instructions exactly.\n\n# YOUR TASK\n1. Get ONE database item using get_ideas tool\n2. Parse that item's content for multiple distinct ideas  \n3. Categorize each distinct idea separately\n4. Update the original item status to 'Done'\n5. Return JSON with ALL distinct ideas in ideas_processed array\n\n# TOOL USAGE\n**get_ideas**: Use limit=1, status='Not Started'\n**update_idea**: Use idea_id from step 1, status='Done'\n\n# RESPONSE FORMAT\nReturn ONLY this JSON structure:\n{\n  \"agent_id\": \"notion\",\n  \"task_id\": \"[task_id_from_instructions]\",\n  \"phase\": \"[task_type]_complete\",\n  \"timestamp\": \"[ISO_timestamp]\",\n  \"execution_time_ms\": [number],\n  \"results\": {\n    \"ideas_processed\": [\n      {\n        \"idea_id\": \"[original_item_id]\",\n        \"title\": \"[distinct_idea_title]\",\n        \"original_content_segment\": \"[relevant_content_part]\",\n        \"categorization\": {\n          \"database\": \"projects|knowledge|journal\",\n          \"tags\": [\"tag1\", \"tag2\", \"tag3\"],\n          \"reasoning\": \"[categorization_explanation]\"\n        }\n      }\n    ]\n  },\n  \"status\": {\n    \"success\": true,\n    \"errors\": [],\n    \"next_phase\": \"complete\"\n  },\n  \"context_updates\": {\n    \"api_calls\": [number],\n    \"tools_used\": [\"list_of_tools\"],\n    \"performance_notes\": \"[brief_note]\"\n  }\n}\n\n**CRITICAL: Output ONLY valid JSON. No explanations or text outside the JSON.**",
+          "maxIterations": 8
+        }
+      },
+      "id": "notion-agent",
+      "name": "Notion Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get ideas from Notion database. For this integration test, MUST use limit=1 and status='Not Started' exactly as specified in the instructions.",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas?limit={limit}&status={status}&daysBack={daysBack}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "limit",
+              "description": "Number of ideas to retrieve (use 1 for integration testing)"
+            },
+            {
+              "name": "status",
+              "description": "Status filter: 'Not Started', 'In Progress', 'Done'"
+            },
+            {
+              "name": "daysBack",
+              "description": "Filter recent ideas (7 = this week, 1 = today)"
+            }
+          ]
+        }
+      },
+      "id": "notion-get-ideas",
+      "name": "Notion Get Ideas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1460, 180]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get specific idea by ID for detailed analysis",
+        "method": "GET",
+        "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "idea_id",
+              "description": "The ID of the specific idea to retrieve"
+            }
+          ]
+        }
+      },
+      "id": "notion-get-by-id",
+      "name": "Notion Get Idea By ID",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1460, 260]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Update an idea's status to 'Done' after processing. ONLY provide idea_id and status parameters.",
+        "method": "PUT",
+        "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"status\": \"{status}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "idea_id",
+              "description": "REQUIRED: ID of the idea to update (get this from previous tool calls)"
+            },
+            {
+              "name": "status", 
+              "description": "REQUIRED: Set to 'Done' after processing the idea"
+            }
+          ]
+        }
+      },
+      "id": "notion-update-idea",
+      "name": "Notion Update Idea",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1460, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Integration Test Results Analysis\nconst notionResult = $json;\nconst parsedData = $('Parse Director Instructions').first().json;\nconst integrationContext = $('Setup Integration Context').first().json.integrationContext;\n\n// Parse Notion Agent JSON response\nlet notionResponse;\ntry {\n  const outputText = notionResult.output || notionResult.text || JSON.stringify(notionResult);\n  const jsonMatch = outputText.match(/\\{[\\s\\S]*\\}/);\n  notionResponse = jsonMatch ? JSON.parse(jsonMatch[0]) : null;\n} catch (error) {\n  notionResponse = { error: 'Failed to parse Notion Agent response', raw: notionResult };\n}\n\n// Integration test analysis\nconst integrationResults = {\n  test_id: integrationContext.sessionId,\n  test_type: 'director_notion_integration',\n  timestamp: new Date().toISOString(),\n  \n  director_phase: {\n    template_loading: !!parsedData.directorResponse,\n    instruction_creation: !!parsedData.instructionText,\n    task_id: parsedData.task_id,\n    instruction_text_generated: parsedData.instructionText ? parsedData.instructionText.length > 0 : false\n  },\n  \n  notion_phase: {\n    execution_success: !!notionResponse && !notionResponse.error,\n    json_format_valid: !!notionResponse?.agent_id,\n    agent_response: notionResponse,\n    tools_used: notionResponse?.context_updates?.tools_used || [],\n    processing_time_ms: notionResponse?.execution_time_ms || null\n  },\n  \n  integration_analysis: {\n    end_to_end_success: !!(parsedData.instructionText && notionResponse?.agent_id),\n    director_to_notion_communication: !!parsedData.instructionText,\n    notion_task_completion: notionResponse?.status?.success || false,\n    context_management: false, // Context update removed for this integration test\n    \n    success_indicators: {\n      template_loaded: !!parsedData.directorResponse,\n      instructions_parsed_to_text: !!parsedData.instructionText,\n      notion_responded: !!notionResponse?.agent_id,\n      json_format_correct: !notionResponse?.error,\n      mcp_tools_used: notionResponse?.context_updates?.tools_used?.length > 0\n    }\n  },\n  \n  summary: {\n    status: (!!(parsedData.instructionText && notionResponse?.agent_id)) ? 'SUCCESS' : 'FAILED',\n    director_mcp_server: parsedData.directorResponse ? 'WORKING' : 'FAILED',\n    notion_agent: notionResponse?.agent_id ? 'WORKING' : 'FAILED',\n    instruction_parser: parsedData.instructionText ? 'WORKING' : 'FAILED',\n    integration_flow: 'TESTED'\n  }\n};\n\nreturn [integrationResults];"
+      },
+      "id": "analyze-results",
+      "name": "Analyze Integration Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    }
+  ],
+  "connections": {
+    "Manual Test Trigger": {
+      "main": [
+        [
+          {
+            "node": "Setup Integration Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup Integration Context": {
+      "main": [
+        [
+          {
+            "node": "Director: Get Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Director: Get Template": {
+      "main": [
+        [
+          {
+            "node": "Director: Create Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Director: Create Instructions": {
+      "main": [
+        [
+          {
+            "node": "Parse Director Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Director Instructions": {
+      "main": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Notion Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Agent": {
+      "main": [
+        [
+          {
+            "node": "Analyze Integration Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Get Ideas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Get Idea By ID": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Update Idea": {
+      "ai_tool": [
+        [
+          {
+            "node": "Notion Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["integration-test", "director-notion", "mcp-server"],
+  "triggerCount": 0,
+  "updatedAt": "2025-09-06T01:15:00.000Z",
+  "versionId": "integration-test-v1"
+}

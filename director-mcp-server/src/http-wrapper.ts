@@ -120,6 +120,44 @@ class DirectorMCPHttpWrapper {
     });
 
     /**
+     * Update Context (mirrors update_context MCP tool)
+     */
+    this.app.post('/api/mcp/update-context', async (req, res) => {
+      try {
+        const { context_id, phase, agent_response, workflow_data } = req.body;
+
+        if (!context_id) {
+          return res.status(400).json({
+            success: false,
+            error: 'context_id is required'
+          });
+        }
+
+        const { contextManager } = getSharedServices();
+        const result = await contextManager.updateContext(context_id, {
+          phase,
+          agent_response,
+          workflow_data,
+          timestamp: new Date().toISOString()
+        });
+
+        return res.json({
+          success: true,
+          data: result,
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        logger.error('Error in update-context endpoint', { 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        });
+        return res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Internal server error'
+        });
+      }
+    });
+
+    /**
      * Create Agent Instructions (mirrors create_agent_instructions MCP tool)
      */
     this.app.post('/api/mcp/create-agent-instructions', async (req, res) => {

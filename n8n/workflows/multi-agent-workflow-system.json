@@ -6,7 +6,7 @@
         "rule": {
           "interval": [
             {
-              "field": "cronExpression", 
+              "field": "cronExpression",
               "expression": "0 9 * * *"
             }
           ]
@@ -16,7 +16,10 @@
       "name": "Daily Trigger",
       "type": "n8n-nodes-base.cron",
       "typeVersion": 1,
-      "position": [240, 400]
+      "position": [
+        240,
+        400
+      ]
     },
     {
       "parameters": {
@@ -30,7 +33,11 @@
                 "workflowType": "multi_agent_director_system",
                 "startTime": "={{ new Date().toISOString() }}",
                 "analysisDate": "={{ new Date().toDateString() }}",
-                "agentsAvailable": ["notion", "planner", "validation"],
+                "agentsAvailable": [
+                  "notion",
+                  "planner",
+                  "validation"
+                ],
                 "sharedData": {},
                 "executionHistory": [],
                 "currentPhase": "initialization",
@@ -47,45 +54,54 @@
           ]
         }
       },
-      "id": "2", 
+      "id": "2",
       "name": "Initialize Multi-Agent Context",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [460, 400]
+      "position": [
+        460,
+        400
+      ]
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3002/api/mcp/get-workflow-template",
+        "url": "http://mcp-director-server-http-dev:3002/api/mcp/get-workflow-template",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ {\n  'workflow_type': $json.systemContext.mcpConfig.workflow_type,\n  'parameters': {\n    'source_database_id': $json.systemContext.mcpConfig.source_database_id,\n    'limit': $json.systemContext.mcpConfig.limit\n  }\n} }}",
         "options": {
-          "timeout": 30000
+          "timeout": 15000
         }
       },
       "id": "3",
-      "name": "Director: Get Workflow Template", 
+      "name": "Director: Get Workflow Template",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [680, 400]
+      "position": [
+        680,
+        400
+      ]
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3002/api/mcp/create-agent-instructions",
+        "url": "http://mcp-director-server-http-dev:3002/api/mcp/create-agent-instructions",
         "method": "POST",
         "sendBody": true,
-        "specifyBody": "json", 
+        "specifyBody": "json",
         "jsonBody": "={{ {\n  'workflow_type': $('Initialize Multi-Agent Context').item.json.systemContext.mcpConfig.workflow_type,\n  'target_agent': $('Initialize Multi-Agent Context').item.json.systemContext.mcpConfig.target_agent,\n  'parameters': {\n    'source_database_id': $('Initialize Multi-Agent Context').item.json.systemContext.mcpConfig.source_database_id,\n    'limit': $('Initialize Multi-Agent Context').item.json.systemContext.mcpConfig.limit\n  }\n} }}",
         "options": {
-          "timeout": 30000
+          "timeout": 15000
         }
       },
       "id": "4",
       "name": "Director: Create Agent Instructions",
-      "type": "n8n-nodes-base.httpRequest", 
+      "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 400]
+      "position": [
+        900,
+        400
+      ]
     },
     {
       "parameters": {
@@ -95,7 +111,10 @@
       "name": "Parse MCP Instructions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 400]
+      "position": [
+        1120,
+        400
+      ]
     },
     {
       "parameters": {
@@ -113,7 +132,7 @@
                 "conditions": [
                   {
                     "operator": {
-                      "type": "string", 
+                      "type": "string",
                       "operation": "equals"
                     },
                     "leftValue": "={{ $json.agentType }}",
@@ -131,7 +150,7 @@
                   "caseSensitive": true,
                   "typeValidation": "strict"
                 },
-                "combinator": "and", 
+                "combinator": "and",
                 "conditions": [
                   {
                     "operator": {
@@ -158,7 +177,7 @@
                   {
                     "operator": {
                       "type": "string",
-                      "operation": "equals" 
+                      "operation": "equals"
                     },
                     "leftValue": "={{ $json.agentType }}",
                     "rightValue": "validation"
@@ -172,23 +191,29 @@
       },
       "id": "6",
       "name": "Route to Agent",
-      "type": "n8n-nodes-base.switch", 
+      "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [1340, 400]
+      "position": [
+        1340,
+        400
+      ]
     },
     {
       "parameters": {
         "model": "gpt-4o",
         "options": {
-          "temperature": 0.7,
-          "maxTokens": 3000
+          "temperature": 0.3,
+          "maxTokens": 4000
         }
       },
       "id": "7",
       "name": "OpenAI Notion Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
-      "position": [1560, 200],
+      "position": [
+        1560,
+        200
+      ],
       "credentials": {
         "openAiApi": {
           "id": "1",
@@ -210,13 +235,16 @@
       "name": "Notion Agent (Director Orchestrated)",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.6,
-      "position": [1560, 300]
+      "position": [
+        1560,
+        300
+      ]
     },
     {
       "parameters": {
         "toolDescription": "Get ideas from Notion database with filtering - core tool for idea processing",
         "method": "GET",
-        "url": "http://host.docker.internal:3001/api/ideas?limit={limit}&filter={filter}&status={status}&daysBack={daysBack}",
+        "url": "http://mcp-notion-idea-server-http-dev:3001/api/ideas?limit={limit}&filter={filter}&status={status}",
         "placeholderDefinitions": {
           "values": [
             {
@@ -224,31 +252,30 @@
               "description": "Number of ideas to retrieve (default: 10, max: 50)"
             },
             {
-              "name": "filter", 
+              "name": "filter",
               "description": "Optional text search filter"
             },
             {
               "name": "status",
               "description": "Status filter: 'Not Started', 'In Progress', 'Done'"
-            },
-            {
-              "name": "daysBack",
-              "description": "Filter recent ideas (7 = this week, 1 = today)"
             }
           ]
         }
       },
-      "id": "9", 
+      "id": "9",
       "name": "Notion Get Ideas",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
-      "position": [1780, 180]
+      "position": [
+        1780,
+        180
+      ]
     },
     {
       "parameters": {
         "toolDescription": "Update idea status, content, and tags - REQUIRED after processing",
         "method": "PUT",
-        "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
+        "url": "http://mcp-notion-idea-server-http-dev:3001/api/ideas/{idea_id}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { \"status\": \"{status}\", \"content\": \"{content}\", \"tags\": \"{tags}\" } }}",
@@ -263,7 +290,7 @@
               "description": "REQUIRED: Set to 'Done' after processing"
             },
             {
-              "name": "content", 
+              "name": "content",
               "description": "Optional: Updated content"
             },
             {
@@ -275,9 +302,12 @@
       },
       "id": "10",
       "name": "Notion Update Idea",
-      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", 
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
-      "position": [1780, 300]
+      "position": [
+        1780,
+        300
+      ]
     },
     {
       "parameters": {
@@ -287,7 +317,10 @@
       "name": "Process Multi-Agent Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1780, 400]
+      "position": [
+        1780,
+        400
+      ]
     }
   ],
   "connections": {
@@ -409,8 +442,10 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": [],
+  "tags": [
+    "env:testing_environment"
+  ],
   "triggerCount": 0,
-  "updatedAt": "2025-09-06T19:00:00.000Z",
+  "updatedAt": "2025-09-08T21:38:01.123Z",
   "versionId": "1"
 }

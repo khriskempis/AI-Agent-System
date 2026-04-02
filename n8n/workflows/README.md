@@ -1,12 +1,35 @@
 # n8n Workflows - Clean & Organized
 
+## 🚨 **IMPORTANT: Workflow Modification Protocol**
+
+**Before testing any workflow modifications, ALWAYS run:**
+```bash
+./n8n/workflows/apply-dev-config.sh
+```
+
+This ensures workflows use **development service URLs** (`-dev` suffixes) instead of production URLs. See [`WORKFLOW_MODIFICATION_PROTOCOL.md`](WORKFLOW_MODIFICATION_PROTOCOL.md) for details.
+
 ## 🎯 **Active Workflows (Ready to Use)**
 
-### **1. `director-notion-integration-test.json`** ✅ **TESTED & WORKING**
+### **🚀 `director-notion-unified-agent.json`** ✅ **RECOMMENDED - NEW!**
+- **Purpose:** Single agent handles both Phase 1 (Categorization) + Phase 2 (Database Creation)
+- **Status:** New simplified approach - eliminates debugging issues
+- **Features:**
+  - ✅ **Single Notion Agent** with ALL tools available
+  - ✅ **Phase 1 & 2** handled by same agent with different instructions
+  - ✅ **Simplified debugging** - only one agent to troubleshoot
+  - ✅ **All tools always available** - no tool limitations per phase
+  - ✅ **Based on verified agent templates** - uses working configurations
+
+**Best for:** Production workflows, simplified debugging, reliable execution
+
+---
+
+### **2. `director-notion-integration-test.json`** ✅ **TESTED & WORKING**
 - **Purpose:** Phase 1 only - Director MCP Server integration test
 - **Status:** Production-ready, successfully tested
 - **Features:**
-  - ✅ Calls Director MCP Server at `http://host.docker.internal:3002`
+  - ✅ Calls Director MCP Server endpoints
   - ✅ Uses `get-workflow-template` and `create-agent-instructions` endpoints
   - ✅ Proper instruction parsing for Notion Agent
   - ✅ Multi-idea categorization support
@@ -16,33 +39,7 @@
 
 ---
 
-### **2. `director-notion-phase2-workflow.json`** 🆕 **PHASE 2 ONLY**
-- **Purpose:** Phase 2 only - Database item creation from categorized ideas
-- **Status:** Ready for testing (test database endpoints first)
-- **Features:**
-  - 🆕 **Mock Phase 1 data** - Uses realistic categorized ideas as input
-  - 🆕 **Director context logging** - Logs Phase 1 results and creates Phase 2 instructions
-  - 🆕 **Generic database creation** - Creates items in projects/knowledge/journal databases
-  - 🆕 **Performance tracking** - Measures creation success rates
-
-**Best for:** Testing database creation functionality, debugging Phase 2 issues
-
----
-
-### **3. `director-notion-complete-workflow.json`** 🆕 **COMPLETE END-TO-END**  
-- **Purpose:** Full workflow - Phase 1 (Categorization) + Phase 2 (Database Creation)
-- **Status:** Ready for testing after Phase 2 validation
-- **Features:**
-  - 🆕 **Complete workflow orchestration** - Full Phase 1 → Phase 2 flow
-  - 🆕 **Director context management** - Maintains context across phases
-  - 🆕 **Multi-database routing** - Routes categorized ideas to appropriate databases
-  - 🆕 **Comprehensive metrics** - End-to-end performance and success tracking
-
-**Best for:** Production multi-step workflows, complete automation, daily processing
-
----
-
-### **4. `multi-agent-workflow-system.json`** 🔄 **UPDATED WITH DIRECTOR MCP**
+### **3. `multi-agent-workflow-system.json`** 🔄 **UPDATED WITH DIRECTOR MCP**
 - **Purpose:** Multi-agent orchestration with Director MCP Server integration  
 - **Status:** Updated Sept 6, 2025 - Ready for advanced testing
 - **Features:**
@@ -66,16 +63,21 @@ tsx test-database-endpoints.ts     # Comprehensive testing
 
 ### **Phase 2: Test Individual Workflows**
 1. **Start simple:** `director-notion-integration-test.json` (Phase 1 only)
-2. **Test creation:** `director-notion-phase2-workflow.json` (Phase 2 only)  
-3. **Test complete:** `director-notion-complete-workflow.json` (End-to-end)
-4. **Advanced testing:** `multi-agent-workflow-system.json` (Multi-agent)
+2. **Test unified:** `director-notion-unified-agent.json` (Recommended - Single agent, both phases)
+3. **Advanced testing:** `multi-agent-workflow-system.json` (Multi-agent)
 
 ---
 
 ## 🗄 **Archived Workflows** 
 
-*Moved to `archive/` folder on Sept 6, 2025*
+*See `archive/ARCHIVE_README.md` for full details*
 
+### **Recently Archived (Jan 8, 2025):**
+- **`director-notion-complete-workflow.json`** - Superseded by unified agent
+- **`director-notion-phase2-workflow.json`** - Phase 2 only, now obsolete
+- **`multi-agent-workflow-system-updated.json`** - Duplicate version
+
+### **Previously Archived (Sept 6, 2025):**
 - **`simplified-intelligent-director.json`** - Duplicate of multi-agent workflow
 - **`director-agent-test.json`** - Superseded by director-notion-integration-test  
 - **`director-mcp-test.json`** - Superseded by director-notion-integration-test
@@ -170,8 +172,8 @@ cd ../testing
 
 ---
 
-**Last Updated:** September 6, 2025  
-**Organization:** Testing files moved to `/testing/` folder  
-**Status:** Clean, organized, ready for production testing  
+**Last Updated:** January 8, 2025  
+**Organization:** Unified agent approach, obsolete workflows archived  
+**Status:** Clean, organized, simplified for reliable execution  
 
 🎯 **Ready to build robust, multi-phase workflows with proper testing!**

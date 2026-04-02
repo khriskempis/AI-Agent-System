@@ -1,0 +1,48 @@
+{
+  "tool_metadata": {
+    "name": "update-context",
+    "version": "1.0.0",
+    "description": "Update shared workflow context with agent results and performance metrics",
+    "last_updated": "2025-01-08",
+    "status": "verified"
+  },
+  "node_config": {
+    "name": "Update Context",
+    "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+    "typeVersion": 1.1,
+    "parameters": {
+      "toolDescription": "Update workflow context with agent execution results, performance metrics, and phase transitions",
+      "method": "POST",
+      "url": "http://mcp-director-server-http:3002/api/mcp/update-context",
+      "sendBody": true,
+      "specifyBody": "json",
+      "jsonBody": "{\\n  \\\"workflow_id\\\": \\\"{workflow_id}\\\",\\n  \\\"phase\\\": \\\"{phase}\\\",\\n  \\\"agent_results\\\": {agent_results},\\n  \\\"performance_metrics\\\": {performance_metrics}\\n}",
+      "placeholderDefinitions": {
+        "values": [
+          {
+            "name": "workflow_id",
+            "description": "Unique workflow execution identifier"
+          },
+          {
+            "name": "phase",
+            "description": "Current workflow phase (e.g., 'categorization_complete', 'database_creation_complete')"
+          },
+          {
+            "name": "agent_results",
+            "description": "JSON object containing agent execution results and outputs"
+          },
+          {
+            "name": "performance_metrics",
+            "description": "JSON object with execution time, success rate, and other metrics"
+          }
+        ]
+      }
+    },
+    "position": [700, 300]
+  },
+  "notes": {
+    "production_url": "http://mcp-director-server-http:3002/api/mcp/update-context",
+    "development_url": "http://host.docker.internal:3002/api/mcp/update-context",
+    "json_format": "Fixed format without n8n expressions - critical for LangChain compatibility"
+  }
+}

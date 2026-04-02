@@ -24,8 +24,8 @@ export class TemplateManager {
   private registryPath: string;
 
   constructor() {
-    // Point to the workflow templates directory (one level up from current directory)
-    this.templateDirectory = path.join(process.cwd(), '../director-mcp/workflow-templates');
+    // Point to the workflow templates directory (mounted in Docker container)
+    this.templateDirectory = path.join(process.cwd(), 'director-mcp/workflow-templates');
     this.registryPath = path.join(this.templateDirectory, 'template-registry.json');
     this.loadTemplateRegistry();
   }

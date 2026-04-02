@@ -30,8 +30,8 @@
                 "phase2Config": {
                   "target_databases": {
                     "projects": "3cd8ea052d6d4b69956e89b1184cae75",
-                    "knowledge": "87654321432143214321210987654321",
-                    "journal": "11111111222222223333333344444444"
+                    "knowledge": "263d7be3dbcd80c0b6e4fd309a8af453", 
+                    "journal": "a1d35f6081a044589425512cb9d136b7"
                   }
                 }
               },
@@ -70,7 +70,7 @@
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3002/api/mcp/get-workflow-template",
+        "url": "http://mcp-director-server-http:3002/api/mcp/get-workflow-template",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
@@ -87,7 +87,7 @@
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3002/api/mcp/create-agent-instructions",
+        "url": "http://mcp-director-server-http:3002/api/mcp/create-agent-instructions",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
@@ -138,12 +138,12 @@
         "text": "={{ $json.instructionText }}",
         "agent": "conversationalAgent",
         "options": {
-          "systemMessage": "You are a Notion Agent specializing in IDEA CATEGORIZATION as Phase 1 of a complete workflow. Your results will feed into Phase 2 where database items are created. Focus on thorough categorization with proper database routing assignments.",
+          "systemMessage": "You are the Notion Agent executing Director instructions.\n\n# EXECUTION APPROACH\n1. Read the task objective and requirements carefully\n2. Use the provided methodology and rules to execute the task\n3. Apply all specified validation and processing rules\n4. Use the required MCP tools as instructed\n5. Return results in the specified JSON format\n\n# RESPONSE FORMAT\nReturn ONLY JSON in this exact structure:\n{\n  \"agent_id\": \"notion\",\n  \"task_id\": \"{{ $json.task_id || 'workflow_task' }}\",\n  \"phase\": \"{{ $json.phase }}_complete\",\n  \"timestamp\": \"ISO_timestamp\",\n  \"execution_time_ms\": number,\n  \"results\": {\n    // Task-specific results based on task type\n    // For categorization: ideas_processed array with categorization analysis\n    // For database_updates: operations_completed array with success/failure status\n    // For content_processing: processed_content with transformations applied\n  },\n  \"status\": {\n    \"success\": boolean,\n    \"errors\": [],\n    \"next_phase\": \"string\"\n  },\n  \"context_updates\": {\n    \"api_calls\": number,\n    \"tools_used\": [],\n    \"performance_notes\": \"string\"\n  }\n}\n\n**CRITICAL: Output only valid JSON. No explanations or summaries. Focus solely on the task described in the instructions.**",
           "maxIterations": 15
         }
       },
-      "id": "notion-phase1-agent",
-      "name": "Notion Agent (Phase 1: Categorization)",
+      "id": "notion-agent",
+      "name": "Notion Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.6,
       "position": [1560, 400]
@@ -152,7 +152,7 @@
       "parameters": {
         "toolDescription": "Get ideas from Notion database for categorization",
         "method": "GET",
-        "url": "http://host.docker.internal:3001/api/ideas?limit={limit}&status={status}&daysBack={daysBack}",
+        "url": "http://mcp-notion-idea-server-http:3001/api/ideas?limit={limit}&status={status}",
         "placeholderDefinitions": {
           "values": [
             {
@@ -162,10 +162,6 @@
             {
               "name": "status",
               "description": "Status filter: use 'Not Started' to get unprocessed ideas"
-            },
-            {
-              "name": "daysBack",
-              "description": "Filter recent ideas (optional: 7 = this week, 1 = today)"
             }
           ]
         }
@@ -180,10 +176,10 @@
       "parameters": {
         "toolDescription": "Update idea status after categorization processing",
         "method": "PUT",
-        "url": "http://host.docker.internal:3001/api/ideas/{idea_id}",
+        "url": "http://mcp-notion-idea-server-http:3001/api/ideas/{idea_id}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"status\": \"{status}\", \"tags\": \"{tags}\" } }}",
+        "jsonBody": "{\n  \"status\": \"{status}\",\n  \"tags\": \"{tags}\"\n}",
         "placeholderDefinitions": {
           "values": [
             {
@@ -202,14 +198,14 @@
         }
       },
       "id": "phase1-update-idea",
-      "name": "Update Idea Status (Phase 1)",
+      "name": "Update Idea Status Phase 1",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [1780, 400]
     },
     {
       "parameters": {
-        "jsCode": "// Process Phase 1 Results and Prepare for Phase 2\nconst phase1Output = $json;\nconst completeContext = $('Parse Phase 1 Instructions').first().json.completeContext;\n\n// Parse Phase 1 results\nlet phase1Results;\ntry {\n  const outputText = phase1Output.output || phase1Output.text || JSON.stringify(phase1Output);\n  console.log('Phase 1 Output:', outputText.substring(0, 500));\n  \n  const jsonMatch = outputText.match(/\\{[\\s\\S]*\\}/);\n  \n  if (jsonMatch) {\n    phase1Results = JSON.parse(jsonMatch[0]);\n  } else {\n    // Fallback structure\n    phase1Results = {\n      agent_id: 'notion',\n      task_id: 'phase1_fallback',\n      phase: 'categorization_complete',\n      timestamp: new Date().toISOString(),\n      results: {\n        ideas_processed: [],\n        summary: { total_processed: 0 }\n      },\n      status: {\n        success: false,\n        next_phase: 'error_review'\n      }\n    };\n  }\n} catch (error) {\n  console.error('Error parsing Phase 1 results:', error.message);\n  phase1Results = {\n    error: error.message,\n    status: { success: false, next_phase: 'error_review' }\n  };\n}\n\n// Validate categorized ideas for Phase 2\nconst categorizedIdeas = phase1Results.results?.ideas_processed || [];\nconst validIdeas = categorizedIdeas.filter(idea => \n  idea.categorization && \n  idea.categorization.database && \n  ['projects', 'knowledge', 'journal'].includes(idea.categorization.database)\n);\n\n// Enhance categorized ideas with target database IDs\nconst enhancedIdeas = validIdeas.map(idea => ({\n  ...idea,\n  categorization: {\n    ...idea.categorization,\n    database_id: completeContext.phase2Config.target_databases[idea.categorization.database] || 'unknown_db_id'\n  }\n}));\n\n// Create Phase 1 completion summary\nconst phase1Summary = {\n  phase1_complete: true,\n  execution_time_ms: Date.now() - new Date(completeContext.startTime).getTime(),\n  ideas_categorized: enhancedIdeas.length,\n  database_distribution: {\n    projects: enhancedIdeas.filter(i => i.categorization.database === 'projects').length,\n    knowledge: enhancedIdeas.filter(i => i.categorization.database === 'knowledge').length,\n    journal: enhancedIdeas.filter(i => i.categorization.database === 'journal').length\n  },\n  ready_for_phase2: enhancedIdeas.length > 0 && phase1Results.status?.success\n};\n\n// Prepare Phase 2 context\nconst phase2Context = {\n  sessionId: completeContext.sessionId,\n  workflowType: 'complete_workflow_phase2',\n  currentPhase: 'phase2_database_creation',\n  phase2StartTime: new Date().toISOString(),\n  context_id: `${completeContext.sessionId}_phase1_complete`,\n  categorized_ideas: enhancedIdeas,\n  target_databases: completeContext.phase2Config.target_databases,\n  phase1_results: phase1Summary\n};\n\nreturn [{\n  phase1Complete: true,\n  readyForPhase2: phase1Summary.ready_for_phase2,\n  phase1Summary,\n  phase2Context,\n  categorizedIdeas: enhancedIdeas,\n  originalPhase1Output: outputText || 'No output captured',\n  transitionData: {\n    ideas_to_create: enhancedIdeas.length,\n    databases_targeted: Object.keys(phase2Context.target_databases),\n    phase1_success: phase1Results.status?.success || false\n  }\n}];"
+        "jsCode": "// Process Phase 1 Results and Prepare for Phase 2\nconst phase1Output = $json;\nconst completeContext = $('Initialize Complete Workflow').first().json.completeWorkflowContext;\n\n// Parse Phase 1 results\nlet phase1Results;\nlet outputText; // Declare outside try block\ntry {\n  outputText = phase1Output.output || phase1Output.text || JSON.stringify(phase1Output);\n  console.log('Phase 1 Output:', outputText.substring(0, 500));\n  \n  const jsonMatch = outputText.match(/\\{[\\s\\S]*\\}/);\n  \n  if (jsonMatch) {\n    phase1Results = JSON.parse(jsonMatch[0]);\n  } else {\n    // Fallback structure\n    phase1Results = {\n      agent_id: 'notion',\n      task_id: 'phase1_fallback',\n      phase: 'categorization_complete',\n      timestamp: new Date().toISOString(),\n      results: {\n        ideas_processed: [],\n        summary: { total_processed: 0 }\n      },\n      status: {\n        success: false,\n        next_phase: 'error_review'\n      }\n    };\n  }\n} catch (error) {\n  console.error('Error parsing Phase 1 results:', error.message);\n  outputText = outputText || 'Error processing output';\n  phase1Results = {\n    error: error.message,\n    status: { success: false, next_phase: 'error_review' }\n  };\n}\n\n// Validate categorized ideas for Phase 2\nconst categorizedIdeas = phase1Results.results?.ideas_processed || [];\nconst validIdeas = categorizedIdeas.filter(idea => \n  idea.categorization && \n  idea.categorization.database && \n  ['projects', 'knowledge', 'journal'].includes(idea.categorization.database)\n);\n\n// Enhance categorized ideas with target database IDs\nconst enhancedIdeas = validIdeas.map(idea => ({\n  ...idea,\n  categorization: {\n    ...idea.categorization,\n    database_id: completeContext.phase2Config.target_databases[idea.categorization.database] || 'unknown_db_id'\n  }\n}));\n\n// Create Phase 1 completion summary\nconst phase1Summary = {\n  phase1_complete: true,\n  execution_time_ms: Date.now() - new Date(completeContext.startTime).getTime(),\n  ideas_categorized: enhancedIdeas.length,\n  database_distribution: {\n    projects: enhancedIdeas.filter(i => i.categorization.database === 'projects').length,\n    knowledge: enhancedIdeas.filter(i => i.categorization.database === 'knowledge').length,\n    journal: enhancedIdeas.filter(i => i.categorization.database === 'journal').length\n  },\n  ready_for_phase2: enhancedIdeas.length > 0 && phase1Results.status?.success\n};\n\n// Prepare Phase 2 context\nconst phase2Context = {\n  sessionId: completeContext.sessionId,\n  workflowType: 'complete_workflow_phase2',\n  currentPhase: 'phase2_database_creation',\n  phase2StartTime: new Date().toISOString(),\n  context_id: `${completeContext.sessionId}_phase1_complete`,\n  categorized_ideas: enhancedIdeas,\n  target_databases: completeContext.phase2Config.target_databases,\n  phase1_results: phase1Summary\n};\n\nreturn [{\n  phase1Complete: true,\n  readyForPhase2: phase1Summary.ready_for_phase2,\n  phase1Summary,\n  phase2Context,\n  categorizedIdeas: enhancedIdeas,\n  originalPhase1Output: outputText || 'No output captured',\n  transitionData: {\n    ideas_to_create: enhancedIdeas.length,\n    databases_targeted: Object.keys(phase2Context.target_databases),\n    phase1_success: phase1Results.status?.success || false\n  }\n}];"
       },
       "id": "phase1-to-phase2-transition", 
       "name": "🔄 Phase 1 → Phase 2 Transition",
@@ -219,7 +215,7 @@
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3002/api/mcp/update-context",
+        "url": "http://mcp-director-server-http:3002/api/mcp/update-context",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
@@ -241,7 +237,7 @@
             {
               "id": "phase2-ready",
               "name": "phase2Context",
-              "value": "={{ $('Phase 1 → Phase 2 Transition').item.json.phase2Context }}",
+              "value": "={{ $('🔄 Phase 1 → Phase 2 Transition').item.json.phase2Context }}",
               "type": "object"
             }
           ]
@@ -255,7 +251,7 @@
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3002/api/mcp/create-agent-instructions",
+        "url": "http://mcp-director-server-http:3002/api/mcp/create-agent-instructions",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
@@ -272,7 +268,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse Phase 2 Instructions for Database Creation\nconst directorResponse = $json;\nconst phase2Context = $('Begin Phase 2: Database Creation').first().json.phase2Context;\n\nconst instructionData = directorResponse.data;\n\nif (!instructionData || !instructionData.instruction) {\n  return [{\n    instructionText: \"Error: No valid Phase 2 instructions received\",\n    error: true,\n    task_id: \"phase2_error\"\n  }];\n}\n\nconst instruction = instructionData.instruction;\nconst categorizedIdeas = phase2Context.categorized_ideas || [];\n\nlet instructionText = '';\n\ninstructionText += `# PHASE 2: DATABASE ITEM CREATION (Complete Workflow)\\n\\n`;\ninstructionText += `## COMPLETE WORKFLOW STATUS\\n`;\ninstructionText += `- ✅ Phase 1: Categorization Complete (${categorizedIdeas.length} ideas processed)\\n`;\ninstructionText += `- 🔄 Phase 2: Database Creation In Progress\\n`;\ninstructionText += `- Session ID: ${phase2Context.sessionId}\\n`;\ninstructionText += `- Context ID: ${phase2Context.context_id}\\n\\n`;\n\ninstructionText += `## PHASE 1 RESULTS SUMMARY\\n`;\nif (phase2Context.phase1_results) {\n  const p1 = phase2Context.phase1_results;\n  instructionText += `- Ideas Categorized: ${p1.ideas_categorized}\\n`;\n  instructionText += `- Projects: ${p1.database_distribution.projects}\\n`;\n  instructionText += `- Knowledge: ${p1.database_distribution.knowledge}\\n`;\n  instructionText += `- Journal: ${p1.database_distribution.journal}\\n`;\n  instructionText += `- Phase 1 Execution Time: ${p1.execution_time_ms}ms\\n\\n`;\n}\n\ninstructionText += `## PHASE 2 OBJECTIVE\\n`;\ninstructionText += `Create new database items from the ${categorizedIdeas.length} categorized ideas.\\n`;\ninstructionText += `Use generic Notion database endpoints to create properly structured items in each target database.\\n\\n`;\n\ninstructionText += `## TARGET DATABASES\\n`;\nif (phase2Context.target_databases) {\n  Object.entries(phase2Context.target_databases).forEach(([type, id]) => {\n    const count = categorizedIdeas.filter(i => i.categorization.database === type).length;\n    instructionText += `- **${type.toUpperCase()}** (${id}): ${count} items to create\\n`;\n  });\n  instructionText += '\\n';\n}\n\ninstructionText += `## CATEGORIZED IDEAS TO CREATE\\n`;\ncategorizedIdeas.forEach((idea, index) => {\n  instructionText += `### ${index + 1}. ${idea.title}\\n`;\n  instructionText += `- **Target**: ${idea.categorization.database} (${idea.categorization.database_id})\\n`;\n  instructionText += `- **Category**: ${idea.categorization.category}\\n`;\n  instructionText += `- **Priority**: ${idea.categorization.priority}\\n`;\n  instructionText += `- **Tags**: [${idea.categorization.tags.join(', ')}]\\n`;\n  instructionText += `- **Content**: ${idea.original_content.substring(0, 100)}...\\n\\n`;\n});\n\ninstructionText += `## EXECUTION STEPS\\n`;\ninstructionText += `For each categorized idea:\\n`;\ninstructionText += `1. **Get Schema**: Call /api/databases/{database_id}/schema\\n`;\ninstructionText += `2. **Create Item**: POST /api/databases/{database_id}/pages with proper properties\\n`;\ninstructionText += `3. **Verify Creation**: Confirm successful creation\\n`;\ninstructionText += `4. **Log Results**: Record success/failure details\\n\\n`;\n\ninstructionText += `## EXPECTED FINAL OUTPUT\\n`;\ninstructionText += `Return comprehensive workflow completion results:\\n`;\ninstructionText += `{\\n`;\ninstructionText += `  \"agent_id\": \"notion\",\\n`;\ninstructionText += `  \"task_id\": \"${instructionData.task_id}\",\\n`;\ninstructionText += `  \"phase\": \"complete_workflow_finished\",\\n`;\ninstructionText += `  \"complete_workflow_results\": {\\n`;\ninstructionText += `    \"phase1_summary\": \"categorization results\",\\n`;\ninstructionText += `    \"phase2_results\": {\\n`;\ninstructionText += `      \"database_items_created\": [\"array of created items\"],\\n`;\ninstructionText += `      \"creation_summary\": {\\n`;\ninstructionText += `        \"total_attempted\": ${categorizedIdeas.length},\\n`;\ninstructionText += `        \"successful_creations\": \"number\",\\n`;\ninstructionText += `        \"failed_creations\": \"number\"\\n`;\ninstructionText += `      }\\n`;\ninstructionText += `    },\\n`;\ninstructionText += `    \"workflow_performance\": {\\n`;\ninstructionText += `      \"total_execution_time_ms\": \"duration\",\\n`;\ninstructionText += `      \"phase1_time_ms\": \"${phase2Context.phase1_results?.execution_time_ms || 0}\",\\n`;\ninstructionText += `      \"phase2_time_ms\": \"duration\"\\n`;\ninstructionText += `    }\\n`;\ninstructionText += `  },\\n`;\ninstructionText += `  \"status\": {\\n`;\ninstructionText += `    \"success\": \"boolean\",\\n`;\ninstructionText += `    \"workflow_complete\": true,\\n`;\ninstructionText += `    \"next_phase\": \"workflow_complete\"\\n`;\ninstructionText += `  }\\n`;\ninstructionText += `}\\n\\n`;\n\ninstructionText += `**This completes the entire Director + Notion workflow. Execute Phase 2 database creation now.**\\n`;\n\nreturn [{\n  instructionText,\n  task_id: instructionData.task_id,\n  phase: 'phase2_database_creation',\n  categorizedIdeas,\n  targetDatabases: phase2Context.target_databases,\n  phase2Context\n}];"
+        "jsCode": "// Parse Phase 2 Instructions for Database Creation\nconst directorResponse = $json;\nconst instructionData = directorResponse.data;\n\nif (!instructionData || !instructionData.instruction) {\n  return [{\n    instructionText: \"Error: No valid Phase 2 instructions received\",\n    error: true,\n    task_id: \"phase2_error\"\n  }];\n}\n\nconst instruction = instructionData.instruction;\nconst targetDatabases = instruction.target_databases || {};\nconst propertyMappings = instruction.property_mappings || {};\n\nlet instructionText = '';\ninstructionText += `# PHASE 2: DATABASE ITEM CREATION\\n\\n`;\ninstructionText += `## DIRECTOR INSTRUCTION RECEIVED\\n`;\ninstructionText += `- Task Type: ${instruction.task_type}\\n`;\ninstructionText += `- Objective: ${instruction.objective}\\n`;\ninstructionText += `- Context ID: ${instructionData.shared_context_id}\\n\\n`;\n\ninstructionText += `## TARGET DATABASES\\n`;\nObject.entries(targetDatabases).forEach(([type, id]) => {\n  instructionText += `- **${type.toUpperCase()}**: ${id}\\n`;\n});\ninstructionText += '\\n';\n\ninstructionText += `## PROPERTY MAPPINGS\\n`;\nObject.entries(propertyMappings).forEach(([dbType, mapping]) => {\n  instructionText += `**${dbType.toUpperCase()}**:\\n`;\n  Object.entries(mapping).forEach(([prop, value]) => {\n    instructionText += `  - ${prop}: ${value}\\n`;\n  });\n});\ninstructionText += '\\n';\n\ninstructionText += `## EXECUTION PLAN\\n`;\ninstructionText += `1. Get categorized ideas from workflow context\\n`;\ninstructionText += `2. For each idea: get schema, create item, verify creation\\n`;\ninstructionText += `3. Return complete results\\n\\n`;\n\ninstructionText += `## EXPECTED OUTPUT\\n`;\ninstructionText += `Return JSON with operations_completed array and summary.\\n`;\n\nreturn [{\n  instructionText,\n  task_id: instructionData.task_id,\n  phase: 'phase2_database_creation',\n  targetDatabases,\n  propertyMappings\n}];"
       },
       "id": "parse-phase2-instructions",
       "name": "Parse Phase 2 Instructions",
@@ -320,7 +316,7 @@
       "parameters": {
         "toolDescription": "Get database schema for proper item creation",
         "method": "GET",
-        "url": "http://host.docker.internal:3001/api/databases/{databaseId}/schema",
+        "url": "http://mcp-notion-idea-server-http:3001/api/databases/{databaseId}/schema",
         "placeholderDefinitions": {
           "values": [
             {
@@ -340,10 +336,10 @@
       "parameters": {
         "toolDescription": "Create new database item from categorized idea",
         "method": "POST",
-        "url": "http://host.docker.internal:3001/api/databases/{databaseId}/pages",
+        "url": "http://mcp-notion-idea-server-http:3001/api/databases/{databaseId}/pages",
         "sendBody": true,
         "specifyBody": "json", 
-        "jsonBody": "={{ {properties} }}",
+        "jsonBody": "{properties}",
         "placeholderDefinitions": {
           "values": [
             {
@@ -367,7 +363,7 @@
       "parameters": {
         "toolDescription": "Verify created database items",
         "method": "GET",
-        "url": "http://host.docker.internal:3001/api/databases/{databaseId}/pages?limit={limit}",
+        "url": "http://mcp-notion-idea-server-http:3001/api/databases/{databaseId}/pages?limit={limit}",
         "placeholderDefinitions": {
           "values": [
             {
@@ -399,7 +395,7 @@
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3002/api/mcp/update-context",
+        "url": "http://mcp-director-server-http:3002/api/mcp/update-context",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
@@ -515,7 +511,7 @@
         ]
       ]
     },
-    "Update Idea Status (Phase 1)": {
+    "Update Idea Status Phase 1": {
       "ai_tool": [
         [
           {

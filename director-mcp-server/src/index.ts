@@ -59,7 +59,7 @@ try {
 const server = new Server(
   {
     name: 'director-mcp-server',
-    version: '1.0.0',
+        version: '1.0.0',
   },
   {
     capabilities: {
@@ -370,12 +370,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: JSON.stringify({
-                success: true,
-                data: instructions,
-                metadata: {
-                  instruction_size: JSON.stringify(instructions).length,
-                  created_at: new Date().toISOString()
-                }
+          success: true,
+          data: instructions,
+          metadata: {
+            instruction_size: JSON.stringify(instructions).length,
+            created_at: new Date().toISOString()
+          }
               }, null, 2),
             },
           ],
@@ -419,13 +419,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               {
                 type: 'text',
                 text: JSON.stringify({
-                  success: true,
-                  data: {
-                    context_id: context.context_id,
-                    agent_response: agentResult.data,
-                    context_update: contextUpdate.data,
-                    workflow_complete: contextUpdate.data?.workflow_complete || false
-                  }
+            success: true,
+            data: {
+              context_id: context.context_id,
+              agent_response: agentResult.data,
+              context_update: contextUpdate.data,
+              workflow_complete: contextUpdate.data?.workflow_complete || false
+            }
                 }, null, 2),
               },
             ],
@@ -530,8 +530,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: JSON.stringify({
-                success: true,
-                data: context
+            success: true,
+            data: context
               }, null, 2),
             },
           ],
@@ -645,9 +645,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: JSON.stringify({
-                success: true,
-                data: stats,
-                timestamp: new Date().toISOString()
+          success: true,
+          data: stats,
+          timestamp: new Date().toISOString()
               }, null, 2),
             },
           ],
@@ -662,8 +662,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: JSON.stringify({
-                success: true,
-                message: 'Template cache cleared'
+          success: true,
+          message: 'Template cache cleared'
               }, null, 2),
             },
           ],
@@ -673,7 +673,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       default:
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
     }
-  } catch (error) {
+    } catch (error) {
     if (error instanceof McpError) {
       throw error;
     }

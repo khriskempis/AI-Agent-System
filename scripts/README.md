@@ -6,20 +6,35 @@
 
 ## 🚀 **Main Scripts**
 
-### **`./scripts/start-full-project.sh`** ⭐
+### **`./scripts/start-production.sh`** 🆕 **New**
+**Dedicated production environment**
+- ✅ Production HTTP services (ports 3001, 3002)
+- ✅ n8n AI Workflow Platform (port 5678)
+- ✅ **Automatic workflow configuration for production**
+- ✅ Production settings (higher limits, timeouts)
+- ✅ Docker service URLs configured automatically
+- **Use this for:** Production deployment and testing
+
+### **`./scripts/start-full-project.sh`** ⭐ **Enhanced**
 **Complete project setup for AI agents**
 - ✅ Notion MCP HTTP API Server (port 3001)
 - ✅ n8n AI Workflow Platform (port 5678)  
 - ✅ Health checks and status validation
 - ✅ All containers visible in Docker Desktop
+- ✅ **Automatic workflow configuration for production**
 - **Use this for:** Running AI agents and workflows
 
-### **`./scripts/start-development.sh`**
-**Development environment with hot reload**
-- ✅ Development container with tsx hot reload
-- ✅ Optional HTTP API server for testing
-- ✅ Volume-mounted source code
-- **Use this for:** Coding and development
+### **`./scripts/start-development.sh`** ⭐ **Complete Development Environment**
+**Everything you need for development + workflow testing**
+- ✅ Notion development container with tsx hot reload
+- ✅ Notion HTTP API server (hot reload) → Port 3001
+- ✅ Director HTTP API server (for n8n workflows) → Port 3002
+- ✅ n8n workflow platform → Port 5678
+- ✅ **Automatic workflow configuration for testing**
+- ✅ localhost URLs configured automatically
+- ✅ Testing settings (lower limits for faster iteration)
+- ✅ Volume-mounted source code for hot reload
+- **Use this for:** All development work including workflow testing
 
 ### **`./scripts/quick-start.sh`**
 **Silent startup (no prompts)**
@@ -88,6 +103,36 @@ Before running, ensure:
 
 **To Stop Everything:**
 → `./scripts/stop-all.sh`
+
+---
+
+## 🔧 **Automatic Workflow Configuration** 🆕
+
+All startup scripts now automatically configure your n8n workflows for the appropriate environment:
+
+### **Development Scripts:**
+- ✅ **`start-development.sh`** → Configures workflows for **testing**
+  - URLs: `http://localhost:3001`, `http://localhost:3002`
+  - Settings: Lower limits (3 ideas), faster timeouts
+  - Perfect for: Local development and testing
+
+### **Production Scripts:**
+- ✅ **`start-production.sh`** → Configures workflows for **production**
+- ✅ **`start-full-project.sh`** → Configures workflows for **production**
+  - URLs: `http://mcp-director-server-http:3002`, `http://mcp-notion-idea-server-http:3001`
+  - Settings: Higher limits (10 ideas), production timeouts
+  - Perfect for: Deployment and production use
+
+### **Manual Configuration (if needed):**
+```bash
+# Switch to testing manually
+cd n8n/workflows/config
+node config-switcher.js --env testing --all
+
+# Switch to production manually  
+cd n8n/workflows/config
+node config-switcher.js --env production --all
+```
 
 ## 🐛 **Troubleshooting**
 

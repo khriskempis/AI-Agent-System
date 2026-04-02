@@ -1,0 +1,37 @@
+{
+  "tool_metadata": {
+    "name": "notion-get-ideas",
+    "version": "1.0.0",
+    "description": "Retrieve ideas from Notion database with optional filtering",
+    "last_updated": "2025-01-08",
+    "status": "verified"
+  },
+  "node_config": {
+    "name": "Notion Get Ideas",
+    "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+    "typeVersion": 1.1,
+    "parameters": {
+      "toolDescription": "Get ideas from the database. Use limit to control number of results (default 10). Optional status filter: 'Not Started', 'In Progress', 'Done'",
+      "method": "GET",
+      "url": "http://mcp-notion-idea-server-http:3001/api/ideas?limit={limit}&status={status}",
+      "placeholderDefinitions": {
+        "values": [
+          {
+            "name": "limit",
+            "description": "Maximum number of ideas to retrieve (default: 10)"
+          },
+          {
+            "name": "status", 
+            "description": "Filter by status: 'Not Started', 'In Progress', 'Done' (optional)"
+          }
+        ]
+      }
+    },
+    "position": [700, 200]
+  },
+  "notes": {
+    "production_url": "http://mcp-notion-idea-server-http:3001/api/ideas?limit={limit}&status={status}",
+    "development_url": "http://host.docker.internal:3001/api/ideas?limit={limit}&status={status}",
+    "known_issues": ["daysBack parameter was removed due to property mismatch"]
+  }
+}

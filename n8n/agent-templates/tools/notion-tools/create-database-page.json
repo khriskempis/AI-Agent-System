@@ -1,0 +1,41 @@
+{
+  "tool_metadata": {
+    "name": "create-database-page",
+    "version": "1.0.0",
+    "description": "Create new database item in specified Notion database",
+    "last_updated": "2025-01-08", 
+    "status": "verified"
+  },
+  "node_config": {
+    "name": "Create Database Item (Phase 2)",
+    "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+    "typeVersion": 1.1,
+    "parameters": {
+      "toolDescription": "Create a new item in the specified database with properties and content",
+      "method": "POST", 
+      "url": "http://mcp-notion-idea-server-http:3001/api/databases/{database_id}/pages",
+      "sendBody": true,
+      "specifyBody": "json",
+      "jsonBody": "{properties}",
+      "placeholderDefinitions": {
+        "values": [
+          {
+            "name": "database_id",
+            "description": "The Notion database ID where to create the item"
+          },
+          {
+            "name": "properties", 
+            "description": "JSON object with database properties (Name, Tags, etc.) and optional content"
+          }
+        ]
+      }
+    },
+    "position": [700, 600]
+  },
+  "notes": {
+    "production_url": "http://mcp-notion-idea-server-http:3001/api/databases/{database_id}/pages",
+    "development_url": "http://host.docker.internal:3001/api/databases/{database_id}/pages",
+    "json_format": "Properties object should include database-specific fields like Name, Tags, etc.",
+    "content_support": "Supports both 'content' (markdown string) and 'children' (Notion blocks) properties"
+  }
+}

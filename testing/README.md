@@ -1,183 +1,100 @@
 # MCP Server Testing Suite
 
-## 🎯 **Comprehensive Testing for All Components**
+Organized testing infrastructure for the MCP Server project components.
 
-This testing directory contains all testing utilities for the MCP Server project, organized by component and written in **TypeScript for uniformity**.
+## 📁 Directory Structure
 
----
-
-## 📁 **Testing Structure**
-
-### **🔧 Database Endpoint Testing (Phase 2 Workflows)**
-- **`test-database-endpoints.ts`** - Comprehensive TypeScript testing
-- **`quick-database-test.sh`** - Quick verification bash script
-- **`DATABASE_ENDPOINT_TESTING.md`** - Detailed documentation
-- **Example data files:** `*_item_example.json`
-
-### **⚙️ Director MCP Server Testing**  
-- **`test-director-endpoints.sh`** - Director API endpoint testing
-- **`TESTING_GUIDE.md`** - Comprehensive testing documentation
-- **Postman collections:** `Director-MCP-Server-*.json`
-
-### **🚀 Quick Testing**
-- **`quick-test.sh`** - Overall system quick test
-- **`quick-database-test.sh`** - Database-specific quick test
-
----
-
-## 🧪 **Usage**
-
-### **Quick Start (Recommended)**
-```bash
-# Install dependencies
-npm install
-
-# Quick test everything
-./quick-test.sh
-
-# Quick test database endpoints specifically  
-./quick-database-test.sh
-
-# Comprehensive database testing (TypeScript)
-npm run test:database
+```
+testing/
+├── 📊 database-testing/          # Database endpoint testing
+│   ├── test-database-endpoints.ts    # TypeScript database tests
+│   ├── test_database_creation.py     # Python database tests (legacy)
+│   ├── DATABASE_ENDPOINT_TESTING.md  # Database testing docs
+│   └── ENDPOINT_TESTING_GUIDE.md     # Endpoint testing guide
+├── 🎯 director-testing/          # Director MCP server testing
+│   └── test-director-endpoints.sh    # Director endpoint tests
+├── 📮 postman-collections/       # Postman test collections
+│   ├── Director-MCP-Server-Postman-Collection.json
+│   └── Director-MCP-Server-Tests.postman_collection.json
+├── 📄 example-data/              # Sample JSON data for testing
+│   ├── project_item_example.json
+│   ├── knowledge_item_example.json
+│   └── journal_item_example.json
+├── 🔧 scripts/                   # Shell scripts and utilities
+│   ├── quick-test.sh                 # Quick system health check
+│   ├── quick-database-test.sh        # Quick database test
+│   └── test-database-endpoints.sh    # Database endpoint script
+├── 📚 docs/                      # Documentation
+│   └── TESTING_GUIDE.md              # Comprehensive testing guide
+├── package.json                  # Node.js dependencies and scripts
+└── README.md                     # This file
 ```
 
-### **Specific Component Testing**
-```bash
-# Test Director MCP Server
-npm run test:director
+## 🚀 Quick Start
 
-# Test database endpoints comprehensively
+### Database Testing (Recommended)
+```bash
+# Run comprehensive database tests with rich content
 npm run test:database
 
-# Run all tests
+# Quick database connectivity test
+npm run test:database:quick
+```
+
+### Director Testing
+```bash
+# Test Director MCP server endpoints
+npm run test:director
+```
+
+### System Health Check
+```bash
+# Quick test of all systems
+npm run quick-test
+```
+
+### All Tests
+```bash
+# Run all available tests
 npm run test:all
 ```
 
----
+## 🎯 Phase 2 Workflow Testing
 
-## 📋 **Testing Sequence for N8N Workflows**
+For testing the **n8n Phase 2 workflow** (database item creation):
 
-### **1. Database Endpoint Testing (CRITICAL FIRST STEP)**
-Before running any n8n workflows with Phase 2 (database creation):
+1. **Validate database endpoints** (already done ✅):
+   ```bash
+   npm run test:database
+   ```
 
-```bash
-# Quick verification
-./quick-database-test.sh
+2. **Import n8n workflow**:
+   - File: `../n8n/workflows/director-notion-phase2-workflow.json`
+   - Or: `../n8n/workflows/director-notion-complete-workflow.json`
 
-# Comprehensive testing  
-npm run test:database
-```
+3. **Test workflow execution** in n8n interface
 
-**Must pass:** Server connectivity, schema access, item creation
+## 📊 Database Configuration
 
-### **2. Director Server Testing**
-```bash
-# Test Director MCP Server endpoints
-./test-director-endpoints.sh
-```
+Current validated database IDs:
+- **Projects**: `3cd8ea052d6d4b69956e89b1184cae75` ✅
+- **Knowledge**: `263d7be3dbcd80c0b6e4fd309a8af453` ✅  
+- **Journal**: `a1d35f6081a044589425512cb9d136b7` ✅
 
-**Must pass:** Template loading, instruction creation, context management
+## 🔧 Dependencies
 
-### **3. N8N Workflow Testing**
-After both endpoint tests pass:
-- Import workflows from `../n8n/workflows/`
-- Test individual workflows in order
-- Monitor execution and debug issues
+- **Node.js**: TypeScript testing infrastructure
+- **tsx**: TypeScript execution
+- **axios**: HTTP client for API testing
+- **curl**: Command-line HTTP testing
+- **jq**: JSON processing (optional, for pretty output)
 
----
+## 📚 Documentation
 
-## ⚡ **TypeScript Integration**
-
-### **Why TypeScript?**
-- **Consistency** with entire MCP Server codebase
-- **Type safety** for API responses and data structures  
-- **Better IDE support** and debugging
-- **Unified development experience**
-
-### **Running TypeScript Tests**
-```bash
-# Direct execution
-tsx test-database-endpoints.ts
-
-# Via npm scripts  
-npm run test:database
-
-# With specific configuration
-CONFIG=production tsx test-database-endpoints.ts
-```
+- **Database Testing**: `database-testing/DATABASE_ENDPOINT_TESTING.md`
+- **Comprehensive Guide**: `docs/TESTING_GUIDE.md`
+- **Endpoint Guide**: `database-testing/ENDPOINT_TESTING_GUIDE.md`
 
 ---
 
-## 🔧 **Configuration**
-
-### **Database Testing Configuration**
-Edit `test-database-endpoints.ts`:
-```typescript
-const CONFIG = {
-  notionServer: 'http://localhost:3001', // or docker URL
-  targetDatabases: {
-    projects: 'YOUR_ACTUAL_PROJECTS_DATABASE_ID',
-    knowledge: 'YOUR_ACTUAL_KNOWLEDGE_DATABASE_ID',  
-    journal: 'YOUR_ACTUAL_JOURNAL_DATABASE_ID'
-  }
-};
-```
-
-### **Director Testing Configuration**
-Edit `test-director-endpoints.sh` for your Director server URL.
-
----
-
-## 📊 **Success Criteria**
-
-### **✅ Database Testing Success:**
-- All 3 target database schemas retrieved
-- Test items created successfully in all databases
-- No permission or connectivity errors
-- Performance metrics within acceptable ranges
-
-### **✅ Director Testing Success:**  
-- All MCP endpoints respond correctly
-- Template loading and instruction creation work
-- Context management functions properly
-- Health checks pass
-
-### **✅ Ready for N8N Workflows:**
-- Both database and director tests pass completely
-- Configuration matches n8n workflow settings
-- All required databases accessible and writable
-
----
-
-## 🐛 **Troubleshooting**
-
-### **Common Database Issues:**
-- **Schema retrieval fails:** Check database IDs and integration permissions
-- **Item creation fails:** Verify property names match database schema
-- **Connection errors:** Ensure Notion server is running
-
-### **Common Director Issues:**
-- **Template loading fails:** Check Director MCP Server is running
-- **Context errors:** Verify endpoint URLs and request formats
-- **Permission errors:** Check server accessibility and authentication
-
----
-
-## 📚 **Documentation**
-
-- **`DATABASE_ENDPOINT_TESTING.md`** - Database testing details
-- **`TESTING_GUIDE.md`** - Complete testing guide  
-- **`../n8n/workflows/README.md`** - N8N workflow documentation
-- **`../n8n/workflows/PHASE2_TESTING_GUIDE.md`** - Phase 2 workflow testing
-
----
-
-## 🔄 **Integration with Development Workflow**
-
-1. **🧪 Test endpoints** using this testing suite
-2. **🔧 Configure n8n workflows** with verified settings  
-3. **🚀 Run workflows** with confidence
-4. **📊 Monitor and debug** using test data and logs
-
-**Your testing infrastructure is now organized, TypeScript-unified, and ready for robust development!** 🎯
+**Ready to test Phase 2 database creation workflow!** 🎯

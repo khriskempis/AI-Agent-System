@@ -322,37 +322,6 @@ app.get('/api/databases/:databaseId/schema', async (req, res) => {
   }
 });
 
-// Auto-detect database property mappings
-app.get('/api/databases/:databaseId/auto-config', async (req, res) => {
-  try {
-    const { databaseId } = req.params;
-    const mappings = await genericNotionService.detectPropertyMappings(databaseId);
-    
-    const suggestedConfig: DatabaseConfig = {
-      id: databaseId,
-      type: 'generic',
-      propertyMappings: mappings
-    };
-    
-    res.json({
-      success: true,
-      data: {
-        databaseId,
-        suggestedConfig,
-        propertyMappings: mappings
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error auto-detecting database config:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
 // Create new page in any database
 app.post('/api/databases/:databaseId/pages', async (req, res) => {
   try {

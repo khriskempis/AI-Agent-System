@@ -1,0 +1,133 @@
+{
+  "environments": {
+    "testing": {
+      "name": "Testing Environment",
+      "description": "Local development and testing configuration",
+      "services": {
+        "director": {
+          "url": "http://mcp-director-server-http-dev:3002",
+          "timeout": 15000,
+          "retries": 2
+        },
+        "notion": {
+          "url": "http://mcp-notion-idea-server-http-dev:3001", 
+          "timeout": 10000,
+          "retries": 2
+        }
+      },
+      "databases": {
+        "source": "16cd7be3dbcd80e1aac9c3a95ffaa61a",
+        "targets": {
+          "projects": "3cd8ea052d6d4b69956e89b1184cae75",
+          "knowledge": "263d7be3dbcd80c0b6e4fd309a8af453",
+          "journal": "a1d35f6081a044589425512cb9d136b7"
+        }
+      },
+      "processing": {
+        "limit": 3,
+        "maxIterations": 15,
+        "debug": true,
+        "verboseLogging": true
+      },
+      "agent": {
+        "temperature": 0.3,
+        "maxTokens": 4000,
+        "model": "gpt-4o-mini"
+      }
+    },
+    "production": {
+      "name": "Production Environment", 
+      "description": "Docker containerized production configuration",
+      "services": {
+        "director": {
+          "url": "http://mcp-director-server-http:3002",
+          "timeout": 30000,
+          "retries": 3
+        },
+        "notion": {
+          "url": "http://mcp-notion-idea-server-http:3001",
+          "timeout": 20000,
+          "retries": 3
+        }
+      },
+      "databases": {
+        "source": "PRODUCTION_SOURCE_DATABASE_ID",
+        "targets": {
+          "projects": "PRODUCTION_PROJECTS_DATABASE_ID",
+          "knowledge": "PRODUCTION_KNOWLEDGE_DATABASE_ID", 
+          "journal": "PRODUCTION_JOURNAL_DATABASE_ID"
+        }
+      },
+      "processing": {
+        "limit": 10,
+        "maxIterations": 25,
+        "debug": false,
+        "verboseLogging": false
+      },
+      "agent": {
+        "temperature": 0.2,
+        "maxTokens": 6000,
+        "model": "gpt-4o-mini"
+      }
+    }
+  },
+  "workflows": {
+    "director-notion-unified-agent": {
+      "name": "Director + Notion Unified Agent",
+      "description": "Single agent handling both categorization and database creation",
+      "configurable_nodes": [
+        "Director: Get Phase 1 Template",
+        "Director: Create Phase 1 Instructions", 
+        "Director: Get Phase 2 Template",
+        "Director: Create Phase 2 Instructions",
+        "Get Ideas for Processing",
+        "Get Idea By ID",
+        "Update Idea Status",
+        "Get Database Schema",
+        "Create Database Item",
+        "Verify Database Creation",
+        "Initialize Workflow Context",
+        "OpenAI Model"
+      ]
+    },
+    "multi-agent-workflow-system": {
+      "name": "Multi-Agent Workflow System",
+      "description": "Complex multi-agent orchestration workflow",
+      "configurable_nodes": [
+        "Notion Get Ideas",
+        "Director: Get Workflow Template",
+        "Director: Create Agent Instructions"
+      ]
+    },
+    "director-notion-integration-test": {
+      "name": "Director + Notion Integration Test", 
+      "description": "Phase 1 only integration test",
+      "configurable_nodes": [
+        "Director: Get Workflow Template",
+        "Director: Create Agent Instructions"
+      ]
+    }
+  },
+  "node_mappings": {
+    "url_replacements": {
+      "director_endpoints": [
+        "/api/mcp/get-workflow-template",
+        "/api/mcp/create-agent-instructions",
+        "/api/mcp/update-context",
+        "/api/stats"
+      ],
+      "notion_endpoints": [
+        "/api/ideas",
+        "/api/ideas/search", 
+        "/api/databases/{id}/schema",
+        "/api/databases/{id}/pages"
+      ]
+    },
+    "parameter_mappings": {
+      "timeout": "options.timeout",
+      "maxIterations": "options.maxIterations",
+      "temperature": "options.temperature",
+      "maxTokens": "options.maxTokens"
+    }
+  }
+}

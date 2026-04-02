@@ -1,0 +1,33 @@
+{
+  "tool_metadata": {
+    "name": "get-workflow-template",
+    "version": "1.0.0",
+    "description": "Get workflow template configuration for multi-agent orchestration",
+    "last_updated": "2025-01-08",
+    "status": "verified"
+  },
+  "node_config": {
+    "name": "Get Workflow Template",
+    "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+    "typeVersion": 1.1,
+    "parameters": {
+      "toolDescription": "Get workflow template for orchestrating multi-agent tasks. Specify template_id to get specific workflow configuration.",
+      "method": "GET",
+      "url": "http://mcp-director-server-http:3002/api/mcp/get-workflow-template?template_id={template_id}",
+      "placeholderDefinitions": {
+        "values": [
+          {
+            "name": "template_id",
+            "description": "Template identifier (e.g., 'idea-categorization-v1', 'daily-processing', 'multi-agent-coordination')"
+          }
+        ]
+      }
+    },
+    "position": [700, 200]
+  },
+  "notes": {
+    "production_url": "http://mcp-director-server-http:3002/api/mcp/get-workflow-template?template_id={template_id}",
+    "development_url": "http://host.docker.internal:3002/api/mcp/get-workflow-template?template_id={template_id}",
+    "common_templates": ["idea-categorization-v1", "daily-processing", "multi-agent-coordination"]
+  }
+}

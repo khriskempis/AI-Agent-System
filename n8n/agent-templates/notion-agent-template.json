@@ -1,0 +1,63 @@
+{
+  "agent_metadata": {
+    "agent_type": "notion",
+    "version": "1.0.0",
+    "last_tested": "2025-01-08",
+    "tested_by": "assistant",
+    "description": "Notion database interaction agent for MCP workflows",
+    "status": "verified",
+    "changelog": [
+      {
+        "version": "1.0.0",
+        "date": "2025-01-08",
+        "changes": "Initial verified configuration extracted from working individual test"
+      }
+    ]
+  },
+  "node_config": {
+    "name": "Notion Agent",
+    "type": "@n8n/n8n-nodes-langchain.agent",
+    "typeVersion": 1.6,
+    "parameters": {
+      "promptType": "define",
+      "text": "{{ $json.instructionText }}",
+      "hasOutputParser": false,
+      "agent": "toolsAgent",
+      "options": {
+        "systemMessage": "You are the Notion Agent executing Director instructions.\\n\\n# EXECUTION APPROACH\\n1. Read the task objective and requirements carefully\\n2. Use the provided methodology and rules to execute the task\\n3. Apply all specified validation and processing rules\\n4. Use the required MCP tools as instructed\\n5. Return results in the specified JSON format\\n\\n# RESPONSE FORMAT\\nReturn ONLY JSON in this exact structure:\\n{\\n  \\\"agent_id\\\": \\\"notion\\\",\\n  \\\"task_id\\\": \\\"{{ $json.originalJSON.task_id || 'test_task' }}\\\",\\n  \\\"phase\\\": \\\"{{ $json.taskType }}_complete\\\",\\n  \\\"timestamp\\\": \\\"ISO_timestamp\\\",\\n  \\\"execution_time_ms\\\": number,\\n  \\\"results\\\": {\\n    // Task-specific results based on task type\\n    // For categorization: ideas_processed array with categorization analysis\\n    // For database_updates: operations_completed array with success/failure status\\n    // For content_processing: processed_content with transformations applied\\n  },\\n  \\\"status\\\": {\\n    \\\"success\\\": boolean,\\n    \\\"errors\\\": [],\\n    \\\"next_phase\\\": \\\"string\\\"\\n  },\\n  \\\"context_updates\\\": {\\n    \\\"api_calls\\\": number,\\n    \\\"tools_used\\\": [],\\n    \\\"performance_notes\\\": \\\"string\\\"\\n  }\\n}\\n\\n**CRITICAL: Output only valid JSON. No explanations or summaries. Focus solely on the task described in the instructions.**",
+        "maxIterations": 10
+      }
+    },
+    "position": [680, 300]
+  },
+  "required_tools": [
+    "notion-get-ideas",
+    "notion-get-idea-by-id", 
+    "notion-search-ideas",
+    "notion-update-idea",
+    "get-database-schema",
+    "create-database-page"
+  ],
+  "dependencies": {
+    "services": ["mcp-notion-idea-server-http:3001"],
+    "models": ["openai/gpt-4o-mini"],
+    "environment_variables": ["OPENAI_API_KEY"]
+  },
+  "testing_info": {
+    "test_cases_passed": [
+      "individual_agent_test",
+      "get_ideas_functionality",
+      "get_idea_by_id_functionality", 
+      "search_ideas_functionality",
+      "update_idea_functionality",
+      "database_schema_retrieval"
+    ],
+    "known_issues": [
+      "Uses host.docker.internal URLs - need to update to service names for production"
+    ],
+    "performance_metrics": {
+      "avg_response_time_ms": 2500,
+      "success_rate_percent": 95
+    }
+  }
+}

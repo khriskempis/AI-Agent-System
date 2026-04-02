@@ -21,9 +21,10 @@ echo -e "${BLUE}🔧 Starting MCP Server Development Environment${NC}"
 echo "=================================================================="
 echo -e "${BLUE}Development Services:${NC}"
 echo "   🔹 Notion MCP Server (stdio + hot reload)"
-echo "   🔹 Director MCP Server (HTTP API + hot reload)"
-echo "   🔹 Optional: Notion HTTP API (hot reload)"
-echo "   🔹 Optional: n8n Workflow Platform"
+echo "   🔹 Notion HTTP API (hot reload) → Port 3001"
+echo "   🔹 Director HTTP API (for n8n workflows) → Port 3002"
+echo "   🔹 n8n Workflow Platform → Port 5678"
+echo "   🔹 Automatic workflow configuration"
 echo
 
 # Check if Docker is running
@@ -38,19 +39,37 @@ docker-compose down --remove-orphans
 
 # Build development containers
 echo -e "${BLUE}🔨 Building development containers...${NC}"
-docker-compose build notion-idea-server-dev director-mcp-server-dev --no-cache
+docker-compose build notion-idea-server-dev director-mcp-server-dev director-mcp-server-http --no-cache
 
 # Start development containers
 echo -e "${GREEN}🚀 Starting development containers with hot reload...${NC}"
 docker-compose --profile dev up -d notion-idea-server-dev director-mcp-server-dev
 
-# Start HTTP API server for testing (automatically)
-echo -e "${BLUE}   Starting HTTP API server (development mode with hot reload)...${NC}"
+# Start HTTP API servers for testing (automatically)
+echo -e "${BLUE}   Starting Notion HTTP API server (development mode with hot reload)...${NC}"
 docker-compose --profile dev up -d notion-idea-server-http-dev
+
+echo -e "${BLUE}   Starting Director HTTP API server (for n8n workflows)...${NC}"
+docker run -d --name mcp-director-server-http-dev --network mcp-servers-network -p 3002:3002 -v "$(pwd)/director-mcp:/app/director-mcp:ro" mcpserver-director-mcp-server-http node dist/http-wrapper.js || echo "   Director HTTP container already running"
 
 # Start n8n workflow platform (automatically)
 echo -e "${BLUE}   Starting n8n workflow platform...${NC}"
 docker-compose up -d n8n
+
+# Configure workflows for development environment
+echo -e "${BLUE}🔧 Configuring workflows for development environment...${NC}"
+if [ -f "./n8n/workflows/config/config-switcher.js" ]; then
+    cd n8n/workflows/config
+    echo -e "${YELLOW}   Switching all workflows to testing configuration...${NC}"
+    if node config-switcher.js --env testing --all; then
+        echo -e "${GREEN}   ✅ All workflows configured for development (localhost URLs)${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️  Warning: Some workflows may not have been configured${NC}"
+    fi
+    cd ../../..
+else
+    echo -e "${YELLOW}   ⚠️  Config switcher not found, workflows may need manual configuration${NC}"
+fi
 
 # Wait for all services to be ready
 echo -e "${YELLOW}⏳ Waiting for all services to start...${NC}"
@@ -66,11 +85,15 @@ else
     echo -e "${YELLOW}⏳ HTTP API Server (dev): starting up...${NC}"
 fi
 
-# Check Director MCP Server health
+# Check Director HTTP API Server
 if curl -s http://localhost:3002/health >/dev/null 2>&1; then
-    echo -e "${GREEN}✅ Director MCP Server (dev): healthy (port 3002)${NC}"
+    echo -e "${GREEN}✅ Director HTTP API Server: healthy (port 3002)${NC}"
 else
-    echo -e "${YELLOW}⏳ Director MCP Server (dev): starting up...${NC}"
+    echo -e "${YELLOW}⏳ Director HTTP API Server: starting up...${NC}"
+    sleep 2
+    if curl -s http://localhost:3002/health >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Director HTTP API Server: healthy (port 3002)${NC}"
+    fi
 fi
 
 # Check n8n Platform
@@ -84,19 +107,21 @@ echo
 echo -e "${GREEN}🎉 Development Environment Ready!${NC}"
 echo "=================================================================="
 echo -e "${BLUE}🔧 Development Features:${NC}"
-echo "   📝 Hot Reload: Edit .ts files → changes apply instantly"
+echo "   📝 Hot Reload: Edit Notion .ts files → changes apply instantly"
 echo "   📦 Volume Mounted: ./notion-idea-server/src → /app/src"
 echo "   🔍 TypeScript Compiler: tsx handles ES modules"
 echo "   🌐 n8n Platform: Full workflow testing environment"
+echo "   🎯 Director HTTP API: Ready for n8n workflow calls"
+echo "   ⚙️ Automatic workflow configuration for localhost URLs"
 echo
 echo -e "${BLUE}🔗 Access URLs:${NC}"
-echo "   📋 Notion MCP API:     http://localhost:3001 (if started, dev mode)"
-echo "   🎯 Director MCP API:   http://localhost:3002 (dev mode)"
+echo "   📊 n8n Platform:       http://localhost:5678"
+echo "   📋 Notion HTTP API:    http://localhost:3001 (dev mode with hot reload)"
+echo "   🎯 Director HTTP API:  http://localhost:3002 (ready for n8n workflows)"
 echo "   📊 Health Checks:"
 echo "      Notion Health:      http://localhost:3001/health"
 echo "      Director Health:    http://localhost:3002/health"
 echo "      System Stats:       http://localhost:3002/api/stats"
-echo "   🎯 n8n Platform:       http://localhost:5678 (if started)"
 echo "   💡 Quick Tests:"
 echo "      Ideas Summary:      http://localhost:3001/api/ideas/summary"
 echo "      Template Loading:   http://localhost:3002/api/mcp/get-workflow-template"
