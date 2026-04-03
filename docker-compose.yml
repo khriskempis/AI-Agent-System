@@ -1,59 +1,7 @@
-# MCP Servers Hub - Docker Compose Configuration
-# This file orchestrates all MCP servers in the hub
+# MCP Server Hub - Docker Compose
+# Services: notion-idea-server-http (port 3001), orchestrator, mysql
 
 services:
-  # Notion Idea Server
-  notion-idea-server:
-    build:
-      context: ./notion-idea-server
-      dockerfile: Dockerfile
-      target: production
-    container_name: mcp-notion-idea-server
-    restart: unless-stopped
-    
-    environment:
-      - NODE_ENV=production
-      - SERVER_NAME=notion-idea-server
-      - SERVER_VERSION=1.0.0
-    
-    env_file:
-      - ./notion-idea-server/.env
-    
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-    
-    # Health check disabled for MCP servers (they communicate via stdio)
-    # healthcheck:
-    #   test: ["CMD", "node", "-e", "console.log('Notion server healthy')"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 10s
-    
-    # Logging configuration
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    
-    # Networks
-    networks:
-      - mcp-network
-    
-    # Labels for service discovery
-    labels:
-      - "mcp.server=notion-idea-server"
-      - "mcp.type=notion"
-      - "mcp.version=1.0.0"
-
   # Notion HTTP API — used by the orchestrator for Notion read/write
   notion-idea-server-http:
     build:
@@ -62,20 +10,18 @@ services:
       target: production
     container_name: mcp-notion-idea-server-http
     restart: unless-stopped
-    
+
     environment:
       - NODE_ENV=production
       - SERVER_NAME=notion-idea-server-http
       - SERVER_VERSION=1.0.0
-    
+
     env_file:
       - ./notion-idea-server/.env
-    
-    # Expose HTTP port for orchestrator access
+
     ports:
       - "3001:3001"
-    
-    # Resource limits
+
     deploy:
       resources:
         limits:
@@ -84,214 +30,19 @@ services:
         reservations:
           memory: 128M
           cpus: '0.1'
-    
-    # Override command to run HTTP wrapper
+
     command: ["node", "dist/http-wrapper.js"]
-    
-    # Networks
+
     networks:
       - mcp-network
-    
-    # Labels for service discovery
+
     labels:
       - "mcp.server=notion-idea-server-http"
       - "mcp.type=notion"
       - "mcp.mode=http"
       - "mcp.version=1.0.0"
 
-  # Development versions (using profiles)
-  notion-idea-server-dev:
-    build:
-      context: ./notion-idea-server
-      dockerfile: Dockerfile
-      target: builder
-    container_name: mcp-notion-idea-server-dev
-    restart: unless-stopped
-    
-    environment:
-      - NODE_ENV=development
-      - SERVER_NAME=notion-idea-server-dev
-    
-    env_file:
-      - ./notion-idea-server/.env
-    
-    volumes:
-      - ./notion-idea-server/src:/app/src:ro
-      - ./notion-idea-server/package.json:/app/package.json:ro
-      - ./notion-idea-server/tsconfig.json:/app/tsconfig.json:ro
-    
-    command: ["npm", "run", "dev"]
-    
-    networks:
-      - mcp-network
-    
-    labels:
-      - "mcp.server=notion-idea-server-dev"
-      - "mcp.type=notion"
-      - "mcp.environment=development"
-    
-    profiles:
-      - dev
-
-  # Development HTTP wrapper with hot reload
-  notion-idea-server-http-dev:
-    build:
-      context: ./notion-idea-server
-      dockerfile: Dockerfile
-      target: builder
-    container_name: mcp-notion-idea-server-http-dev
-    restart: unless-stopped
-    
-    environment:
-      - NODE_ENV=development
-      - SERVER_NAME=notion-idea-server-http-dev
-    
-    env_file:
-      - ./notion-idea-server/.env
-    
-    # Expose HTTP port for development testing
-    ports:
-      - "3001:3001"
-    
-    volumes:
-      - ./notion-idea-server/src:/app/src:ro
-      - ./notion-idea-server/package.json:/app/package.json:ro
-      - ./notion-idea-server/tsconfig.json:/app/tsconfig.json:ro
-    
-    # Run HTTP wrapper in development mode with hot reload
-    command: ["npm", "run", "http-dev"]
-    
-    networks:
-      - mcp-network
-    
-    labels:
-      - "mcp.server=notion-idea-server-http-dev"
-      - "mcp.type=notion"
-      - "mcp.mode=http"
-      - "mcp.environment=development"
-    
-    profiles:
-      - dev
-
-  # Director MCP Server - Orchestrates multi-agent workflows
-  director-mcp-server:
-    build:
-      context: ./director-mcp-server
-      dockerfile: Dockerfile
-      target: production
-    container_name: mcp-director-server
-    restart: unless-stopped
-    
-    environment:
-      - NODE_ENV=production
-      - SERVER_NAME=director-mcp-server
-      - SERVER_VERSION=1.0.0
-      - LOG_LEVEL=info
-    
-    # Note: No port exposure needed - MCP uses stdio transport
-    
-    # Mount template and schema files
-    volumes:
-      - ./director-mcp:/app/director-mcp:ro
-      - ./docs:/app/docs:ro
-      - director_logs:/app/logs
-    
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.2'
-    
-    # Networks
-    networks:
-      - mcp-network
-    
-    # Note: No health check needed - MCP server communicates via stdio
-    
-    # Labels for service discovery
-    labels:
-      - "mcp.server=director-mcp-server"
-      - "mcp.type=director"
-      - "mcp.mode=stdio"
-      - "mcp.version=1.0.0"
-      - "service=workflow-orchestration"
-    
-    # Dependencies
-    depends_on:
-      - notion-idea-server-http
-
-  # Director MCP Server - Development Mode
-  director-mcp-server-dev:
-    build:
-      context: ./director-mcp-server
-      dockerfile: Dockerfile
-      target: builder
-    container_name: mcp-director-server-dev
-    restart: unless-stopped
-    
-    environment:
-      - NODE_ENV=development
-      - SERVER_NAME=director-mcp-server-dev
-      - LOG_LEVEL=debug
-    
-    # Note: No port exposure needed - MCP uses stdio transport
-    
-    # Mount source for development
-    volumes:
-      - ./director-mcp-server/src:/app/src:ro
-      - ./director-mcp-server/package.json:/app/package.json:ro
-      - ./director-mcp-server/tsconfig.json:/app/tsconfig.json:ro
-      - ./director-mcp:/app/director-mcp:ro
-      - ./docs:/app/docs:ro
-      - director_logs_dev:/app/logs
-    
-    # Override command for development
-    command: ["npm", "run", "dev"]
-    
-    networks:
-      - mcp-network
-    
-    labels:
-      - "mcp.server=director-mcp-server-dev"
-      - "mcp.type=director"
-      - "mcp.mode=stdio"
-      - "mcp.environment=development"
-    
-    depends_on:
-      - notion-idea-server-http-dev
-    
-    profiles:
-      - dev
-
-  # Template for future MCP servers
-  # Copy and modify this template when adding new servers
-  # 
-  # example-server:
-  #   build:
-  #     context: ./example-server
-  #     dockerfile: Dockerfile
-  #   container_name: mcp-example-server
-  #   restart: unless-stopped
-  #   
-  #   environment:
-  #     - NODE_ENV=production
-  #     - SERVER_NAME=example-server
-  #   
-  #   env_file:
-  #     - ./example-server/.env
-  #   
-  #   networks:
-  #     - mcp-network
-  #   
-  #   labels:
-  #     - "mcp.server=example-server"
-  #     - "mcp.type=example"
-
-  # Orchestrator — TypeScript multi-agent pipeline runner (replaces n8n workflows)
+  # Orchestrator — TypeScript multi-agent pipeline runner
   orchestrator:
     build:
       context: ./orchestrator
@@ -377,19 +128,11 @@ services:
       - "app=orchestrator-mysql"
       - "service=database"
 
-# Shared network for all MCP servers
 networks:
   mcp-network:
     external: true
     name: mcp-servers-network
 
-# Shared volumes (if needed for future servers)
 volumes:
-  mcp-shared-data:
-    driver: local
-  director_logs:
-    driver: local
-  director_logs_dev:
-    driver: local
   mysql_data:
     driver: local
