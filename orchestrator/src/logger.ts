@@ -5,6 +5,7 @@ const STAGES = {
   VALIDATE: 4,
   EVALUATE: 5,
   WRITE: 6,
+  PLAN: 7,
 } as const;
 
 type Stage = keyof typeof STAGES;

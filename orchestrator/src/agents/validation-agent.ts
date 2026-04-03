@@ -2,13 +2,12 @@ import { logger } from "../logger.js";
 import type { AgentInput, AgentOutput } from "./types.js";
 
 /**
- * ValidationAgent — assesses the overall quality of a daily workflow run.
+ * ValidationAgent — assesses the quality of the daily categorization run.
  *
  * Receives all prior phase results via input.parameters.phaseResults and
- * produces a pass/fail summary. Replaces the n8n "validation-agent-execute" webhook.
+ * produces a pass/fail summary of the notion (categorization) phase.
  *
- * Currently performs structural validation (counts, error rates).
- * Claude-based semantic validation can be layered on in a future phase.
+ * Planning runs separately (plan-idea pipeline) and is not assessed here.
  */
 export class ValidationAgent {
   async execute(input: AgentInput): Promise<AgentOutput> {
@@ -35,7 +34,6 @@ export class ValidationAgent {
 
     const notionResult = phaseResults["notion"];
 
-    // If no notion phase ran, nothing to validate
     if (!notionResult) {
       logger.info("[ValidationAgent] No notion phase results — skipping validation");
       return {
@@ -54,10 +52,10 @@ export class ValidationAgent {
 
     const passed = notionResult.success && failed === 0;
     const feedback = passed
-      ? `All ${processed} idea(s) processed successfully.`
+      ? `All ${processed} idea(s) categorized successfully.`
       : failed === total
       ? `All ${total} idea(s) failed — check connectivity and API credentials.`
-      : `${failed} of ${total} idea(s) failed. ${processed} succeeded.`;
+      : `${failed} of ${total} idea(s) failed categorization. ${processed} succeeded.`;
 
     logger.info(`[ValidationAgent] ${feedback}`);
 
@@ -70,13 +68,7 @@ export class ValidationAgent {
       phase: "validation",
       success: passed,
       durationMs: Date.now() - start,
-      results: {
-        totalIdeas: total,
-        processed,
-        failed,
-        feedback,
-        notionAgentSuccess: notionResult.success,
-      },
+      results: { totalIdeas: total, processed, failed, feedback },
       errors: passed ? [] : notionResult.errors,
     };
   }

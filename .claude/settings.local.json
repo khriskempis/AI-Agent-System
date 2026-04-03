@@ -3,7 +3,13 @@
     "allow": [
       "Bash(npx tsc:*)",
       "Bash(npm run:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(npx tsx:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker compose:*)",
+      "Bash(curl -s http://localhost:3001/health)",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c \":*)"
     ]
   }
 }

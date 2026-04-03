@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { categorizeIdea } from "./pipelines/categorize-idea.js";
+import { planIdea } from "./pipelines/plan-idea.js";
 import { getAllUnprocessedIdeas } from "./notion-client.js";
+import { NotionAgent } from "./agents/notion-agent.js";
 import { logger } from "./logger.js";
 
 function parseArgs(argv: string[]): {
@@ -45,13 +47,35 @@ async function main(): Promise<void> {
       console.error("  npx tsx src/index.ts categorize-idea --id <id> --dry-run");
       process.exit(1);
     }
+  } else if (pipeline === "plan-idea") {
+    if (id) {
+      await planIdea(id, { dryRun });
+    } else if (all) {
+      logger.info('Fetching all projects with status "Ready for Planning"...');
+      const notion = new NotionAgent();
+      const projects = await notion.getReadyForPlanningProjects();
+      logger.info(`Found ${projects.length} project(s) ready for planning`);
+
+      for (const project of projects) {
+        console.log(`\n${"=".repeat(60)}`);
+        console.log(`Planning: ${project.title} (${project.id})`);
+        console.log("=".repeat(60));
+        await planIdea(project.id, { dryRun });
+      }
+    } else {
+      console.error("Usage:");
+      console.error("  npx tsx src/index.ts plan-idea --id <notion-page-id>");
+      console.error("  npx tsx src/index.ts plan-idea --all");
+      console.error("  npx tsx src/index.ts plan-idea --id <id> --dry-run");
+      process.exit(1);
+    }
   } else if (pipeline === "scheduler") {
     const { startScheduler } = await import("./scheduler.js");
     startScheduler();
     // node-cron keeps the event loop alive — process stays running until Ctrl+C
   } else {
     console.error(`Unknown pipeline: "${pipeline}"`);
-    console.error("Available pipelines: categorize-idea, scheduler");
+    console.error("Available pipelines: categorize-idea, plan-idea, scheduler");
     process.exit(1);
   }
 }

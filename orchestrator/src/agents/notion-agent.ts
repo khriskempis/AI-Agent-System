@@ -1,5 +1,5 @@
 import "dotenv/config";
-import type { NotionIdea, UpdateIdeaPayload } from "../notion-client.js";
+import type { NotionIdea, ProjectPage, UpdateIdeaPayload } from "../notion-client.js";
 
 const BASE_URL = (): string => process.env.NOTION_API_URL ?? "http://localhost:3001";
 
@@ -147,6 +147,38 @@ export class NotionAgent {
     return request<{ id: string; url: string }>(`/api/databases/${databaseId}/pages`, {
       method: "POST",
       body: JSON.stringify({ properties, content }),
+    });
+  }
+
+  // ─── Project database methods ──────────────────────────────────────────────
+  // These operate on NOTION_PROJECTS_DATABASE_ID via the generic database endpoints.
+
+  /** Fetch all project pages with status "Ready for Planning" */
+  async getReadyForPlanningProjects(): Promise<ProjectPage[]> {
+    const dbId = process.env.NOTION_PROJECTS_DATABASE_ID;
+    if (!dbId) throw new Error("NOTION_PROJECTS_DATABASE_ID is not set");
+    return request<ProjectPage[]>(
+      `/api/databases/${dbId}/pages?status=Ready%20for%20Planning`
+    );
+  }
+
+  /** Fetch a single project page by page ID */
+  async getProjectPage(pageId: string): Promise<ProjectPage> {
+    const dbId = process.env.NOTION_PROJECTS_DATABASE_ID;
+    if (!dbId) throw new Error("NOTION_PROJECTS_DATABASE_ID is not set");
+    return request<ProjectPage>(`/api/databases/${dbId}/pages/${pageId}`);
+  }
+
+  /** Update a project page — supports content and/or status */
+  async updateProjectPage(
+    pageId: string,
+    patch: { content?: string; status?: string }
+  ): Promise<void> {
+    const dbId = process.env.NOTION_PROJECTS_DATABASE_ID;
+    if (!dbId) throw new Error("NOTION_PROJECTS_DATABASE_ID is not set");
+    await request(`/api/databases/${dbId}/pages/${pageId}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
     });
   }
 }
