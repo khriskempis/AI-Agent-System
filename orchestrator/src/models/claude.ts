@@ -15,11 +15,12 @@ export interface ClaudeMessage {
 export async function ask(
   model: ClaudeModel,
   systemPrompt: string,
-  userMessage: string
+  userMessage: string,
+  maxTokens: number = 4096
 ): Promise<string> {
   const response = await client.messages.create({
     model,
-    max_tokens: 4096,
+    max_tokens: maxTokens,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
   });
@@ -48,9 +49,10 @@ function extractFirstJSON(text: string): string {
 export async function askJSON<T>(
   model: ClaudeModel,
   systemPrompt: string,
-  userMessage: string
+  userMessage: string,
+  maxTokens: number = 4096
 ): Promise<T> {
-  const raw = await ask(model, systemPrompt, userMessage);
+  const raw = await ask(model, systemPrompt, userMessage, maxTokens);
   const json = extractFirstJSON(raw);
   return JSON.parse(json) as T;
 }

@@ -69,13 +69,29 @@ async function main(): Promise<void> {
       console.error("  npx tsx src/index.ts plan-idea --id <id> --dry-run");
       process.exit(1);
     }
+  } else if (pipeline === "analyze-tiktok") {
+    const { runTiktokAnalysis } = await import("./pipelines/analyze-tiktok.js");
+
+    const argv = process.argv;
+    const limitIdx = argv.indexOf("--limit");
+    const limit = limitIdx !== -1 ? Number(argv[limitIdx + 1]) : undefined;
+
+    if (!id && !all && !limit) {
+      console.error("Usage:");
+      console.error("  npx tsx src/index.ts analyze-tiktok --id <video_id>");
+      console.error("  npx tsx src/index.ts analyze-tiktok --limit 50");
+      console.error("  npx tsx src/index.ts analyze-tiktok --all");
+      process.exit(1);
+    }
+
+    await runTiktokAnalysis({ id: id ?? undefined, limit, all });
   } else if (pipeline === "scheduler") {
     const { startScheduler } = await import("./scheduler.js");
     startScheduler();
     // node-cron keeps the event loop alive — process stays running until Ctrl+C
   } else {
     console.error(`Unknown pipeline: "${pipeline}"`);
-    console.error("Available pipelines: categorize-idea, plan-idea, scheduler");
+    console.error("Available pipelines: categorize-idea, plan-idea, analyze-tiktok, scheduler");
     process.exit(1);
   }
 }

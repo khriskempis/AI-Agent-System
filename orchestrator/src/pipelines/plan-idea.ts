@@ -1,6 +1,6 @@
 import { NotionAgent } from "../agents/notion-agent.js";
 import type { ProjectPage } from "../notion-client.js";
-import { ask } from "../models/claude.js";
+import { ask } from "../models/ollama.js";
 import { logger } from "../logger.js";
 import { withRetry } from "../workflow.js";
 import {
@@ -138,7 +138,7 @@ export async function planIdea(
     let plan: string;
     try {
       plan = await withRetry(
-        () => ask("claude-sonnet-4-6", systemPrompt, userMessage),
+        () => ask("deepseek-r1:14b", systemPrompt, userMessage),
         { label: "PLAN" }
       );
       await logEvent(runId, "PLAN", "COMPLETED", 1, { length: plan.length, isRevision }, undefined, Date.now() - planStart);

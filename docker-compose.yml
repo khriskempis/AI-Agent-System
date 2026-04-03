@@ -1,5 +1,5 @@
 # MCP Server Hub - Docker Compose
-# Services: notion-idea-server-http (port 3001), orchestrator, mysql
+# Services: notion-idea-server-http (port 3001), orchestrator, mysql, ollama (port 11434)
 
 services:
   # Notion HTTP API — used by the orchestrator for Notion read/write
@@ -54,6 +54,9 @@ services:
     environment:
       - NODE_ENV=production
       - NOTION_API_URL=http://notion-idea-server-http:3001
+      - OLLAMA_URL=http://ollama:11434
+      - WHISPER_URL=http://whisper:9000
+      - TIKTOK_VIDEOS_PATH=/mnt/m/TT videos/data
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - MYSQL_USER=orchestrator
@@ -67,6 +70,8 @@ services:
       mysql:
         condition: service_healthy
       notion-idea-server-http:
+        condition: service_started
+      ollama:
         condition: service_started
 
     deploy:
@@ -104,6 +109,8 @@ services:
       - mysql_data:/var/lib/mysql
       # Schema is auto-loaded on first container startup
       - ./orchestrator/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # TikTok DB — local-only, not synced to other machines
+      - ./scripts/tiktok/schema.sql:/docker-entrypoint-initdb.d/02-tiktok-schema.sql:ro
 
     networks:
       - mcp-network
@@ -128,11 +135,80 @@ services:
       - "app=orchestrator-mysql"
       - "service=database"
 
+  # Ollama — local LLM inference server with NVIDIA GPU passthrough
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+
+    ports:
+      - "11434:11434"
+
+    volumes:
+      - ollama_data:/root/.ollama
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    networks:
+      - mcp-network
+
+    labels:
+      - "app=ollama"
+      - "service=local-llm"
+
+  # Whisper — GPU-accelerated audio transcription service (faster-whisper)
+  # Mounts the TikTok video library read-only so it can access local MP4 files.
+  # Model is downloaded on first startup and cached in the whisper_models volume.
+  whisper:
+    build:
+      context: ./whisper-service
+      dockerfile: Dockerfile
+    container_name: whisper
+    restart: unless-stopped
+
+    environment:
+      - WHISPER_MODEL=medium
+      - WHISPER_DEVICE=cuda
+      - WHISPER_COMPUTE_TYPE=float16
+
+    ports:
+      - "9000:9000"
+
+    volumes:
+      - whisper_models:/models
+      # TikTok videos mounted read-only — container sees them at /tiktok-videos
+      - "/mnt/m/TT videos/data:/tiktok-videos:ro"
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    networks:
+      - mcp-network
+
+    labels:
+      - "app=whisper"
+      - "service=transcription"
+
 networks:
   mcp-network:
     external: true
     name: mcp-servers-network
 
 volumes:
+  whisper_models:
+    driver: local
   mysql_data:
+    driver: local
+  ollama_data:
     driver: local
