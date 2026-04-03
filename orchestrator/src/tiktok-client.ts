@@ -25,6 +25,14 @@ export interface TiktokVideo {
   localFilePath: string;
   isLiked: boolean;
   isBookmarked: boolean;
+  queuedForAnalysis: boolean;
+}
+
+export interface QueueStats {
+  queued: number;        // queued_for_analysis=1, not yet done
+  done: number;          // queued_for_analysis=1, analysis done
+  total: number;         // total videos in library
+  withLocalFile: number; // videos with local MP4
 }
 
 export interface TiktokAnalysisRow {
@@ -73,59 +81,157 @@ function getPool(): mysql.Pool {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch videos that have a local MP4 file and have not yet been analyzed.
- * Used by the analyze-tiktok pipeline to get its work queue.
+ * Fetch videos that are queued for analysis and not yet done.
+ * Only returns videos where queued_for_analysis=1 — the pipeline
+ * only processes what you've explicitly selected.
+ * --id bypasses this (see getVideoById) for one-off runs.
  */
 export async function getPendingVideos(limit: number = 50): Promise<TiktokVideo[]> {
   const db = getPool();
   const [rows] = await db.query<mysql.RowDataPacket[]>(
     `SELECT v.video_id, v.author_id, v.caption, v.create_time,
-            v.tiktok_url, v.local_file_path, v.is_liked, v.is_bookmarked
+            v.tiktok_url, v.local_file_path, v.is_liked, v.is_bookmarked,
+            v.queued_for_analysis
      FROM tiktok_videos v
      LEFT JOIN tiktok_analysis a ON a.video_id = v.video_id AND a.analysis_status = 'done'
      WHERE v.has_local_file = 1
+       AND v.queued_for_analysis = 1
        AND a.video_id IS NULL
      ORDER BY v.is_bookmarked DESC, v.digg_count DESC
      LIMIT ?`,
     [limit]
   );
 
-  return rows.map((r) => ({
-    videoId:       r.video_id,
-    authorId:      r.author_id,
-    caption:       r.caption,
-    createTime:    r.create_time,
-    tiktokUrl:     r.tiktok_url,
-    localFilePath: r.local_file_path,
-    isLiked:       Boolean(r.is_liked),
-    isBookmarked:  Boolean(r.is_bookmarked),
-  }));
+  return rows.map(rowToVideo);
 }
 
 /**
  * Fetch a single video by ID. Returns null if not found.
+ * Used by --id flag — bypasses the queue flag.
  */
 export async function getVideoById(videoId: string): Promise<TiktokVideo | null> {
   const db = getPool();
   const [rows] = await db.query<mysql.RowDataPacket[]>(
     `SELECT video_id, author_id, caption, create_time,
-            tiktok_url, local_file_path, is_liked, is_bookmarked
+            tiktok_url, local_file_path, is_liked, is_bookmarked, queued_for_analysis
      FROM tiktok_videos
      WHERE video_id = ?`,
     [videoId]
   );
 
   if (rows.length === 0) return null;
-  const r = rows[0];
+  return rowToVideo(rows[0]);
+}
+
+/**
+ * Queue one or more videos for analysis by setting queued_for_analysis=1.
+ * Returns the number of rows actually updated (0 if IDs not found).
+ */
+export async function queueVideos(videoIds: string[]): Promise<number> {
+  if (videoIds.length === 0) return 0;
+  const db = getPool();
+  const placeholders = videoIds.map(() => "?").join(",");
+  const [result] = await db.query<mysql.ResultSetHeader>(
+    `UPDATE tiktok_videos SET queued_for_analysis = 1 WHERE video_id IN (${placeholders})`,
+    videoIds
+  );
+  return result.affectedRows;
+}
+
+/**
+ * Queue videos by filter criteria. Returns count of newly queued videos.
+ */
+export async function queueByFilter(filter: {
+  bookmarked?: boolean;
+  liked?: boolean;
+  authorHandle?: string;
+  minPlays?: number;
+}): Promise<number> {
+  const db = getPool();
+  const conditions: string[] = ["v.has_local_file = 1", "v.queued_for_analysis = 0"];
+  const params: unknown[] = [];
+
+  if (filter.bookmarked) { conditions.push("v.is_bookmarked = 1"); }
+  if (filter.liked)      { conditions.push("v.is_liked = 1"); }
+  if (filter.minPlays)   { conditions.push("v.play_count >= ?"); params.push(filter.minPlays); }
+
+  if (filter.authorHandle) {
+    conditions.push("a.unique_id = ?");
+    params.push(filter.authorHandle.replace(/^@/, "")); // strip leading @ if present
+  }
+
+  const join = filter.authorHandle
+    ? "JOIN tiktok_authors a ON a.author_id = v.author_id"
+    : "";
+
+  const [result] = await db.query<mysql.ResultSetHeader>(
+    `UPDATE tiktok_videos v
+     ${join}
+     SET v.queued_for_analysis = 1
+     WHERE ${conditions.join(" AND ")}`,
+    params
+  );
+  return result.affectedRows;
+}
+
+/**
+ * List all queued videos that haven't been analyzed yet.
+ * Used by the --list flag to show what's pending.
+ */
+export async function listQueued(limit: number = 100): Promise<TiktokVideo[]> {
+  const db = getPool();
+  const [rows] = await db.query<mysql.RowDataPacket[]>(
+    `SELECT v.video_id, v.author_id, v.caption, v.create_time,
+            v.tiktok_url, v.local_file_path, v.is_liked, v.is_bookmarked,
+            v.queued_for_analysis
+     FROM tiktok_videos v
+     LEFT JOIN tiktok_analysis a ON a.video_id = v.video_id AND a.analysis_status = 'done'
+     WHERE v.queued_for_analysis = 1
+       AND a.video_id IS NULL
+     ORDER BY v.is_bookmarked DESC, v.digg_count DESC
+     LIMIT ?`,
+    [limit]
+  );
+  return rows.map(rowToVideo);
+}
+
+/**
+ * Summary counts for the queue and library.
+ */
+export async function getQueueStats(): Promise<QueueStats> {
+  const db = getPool();
+  const [[row]] = await db.query<mysql.RowDataPacket[]>(`
+    SELECT
+      SUM(v.queued_for_analysis = 1 AND (a.analysis_status IS NULL OR a.analysis_status != 'done')) AS queued,
+      SUM(v.queued_for_analysis = 1 AND a.analysis_status = 'done')                                 AS done,
+      COUNT(*)                                                                                        AS total,
+      SUM(v.has_local_file = 1)                                                                      AS with_local_file
+    FROM tiktok_videos v
+    LEFT JOIN tiktok_analysis a ON a.video_id = v.video_id
+  `);
   return {
-    videoId:       r.video_id,
-    authorId:      r.author_id,
-    caption:       r.caption,
-    createTime:    r.create_time,
-    tiktokUrl:     r.tiktok_url,
-    localFilePath: r.local_file_path,
-    isLiked:       Boolean(r.is_liked),
-    isBookmarked:  Boolean(r.is_bookmarked),
+    queued:        Number(row.queued ?? 0),
+    done:          Number(row.done ?? 0),
+    total:         Number(row.total ?? 0),
+    withLocalFile: Number(row.with_local_file ?? 0),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function rowToVideo(r: mysql.RowDataPacket): TiktokVideo {
+  return {
+    videoId:           r.video_id,
+    authorId:          r.author_id,
+    caption:           r.caption,
+    createTime:        r.create_time,
+    tiktokUrl:         r.tiktok_url,
+    localFilePath:     r.local_file_path,
+    isLiked:           Boolean(r.is_liked),
+    isBookmarked:      Boolean(r.is_bookmarked),
+    queuedForAnalysis: Boolean(r.queued_for_analysis),
   };
 }
 

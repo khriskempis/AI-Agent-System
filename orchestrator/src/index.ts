@@ -69,6 +69,15 @@ async function main(): Promise<void> {
       console.error("  npx tsx src/index.ts plan-idea --id <id> --dry-run");
       process.exit(1);
     }
+  } else if (pipeline === "embed-tiktok") {
+    const { runTiktokEmbedding } = await import("./pipelines/embed-tiktok.js");
+
+    const argv = process.argv;
+    const limitIdx = argv.indexOf("--limit");
+    const limit   = limitIdx !== -1 ? Number(argv[limitIdx + 1]) : undefined;
+    const reindex = argv.includes("--reindex");
+
+    await runTiktokEmbedding({ limit, reindex });
   } else if (pipeline === "analyze-tiktok") {
     const { runTiktokAnalysis } = await import("./pipelines/analyze-tiktok.js");
 
@@ -85,13 +94,33 @@ async function main(): Promise<void> {
     }
 
     await runTiktokAnalysis({ id: id ?? undefined, limit, all });
+  } else if (pipeline === "queue-tiktok") {
+    const { runQueueTiktok } = await import("./pipelines/queue-tiktok.js");
+
+    const argv = process.argv;
+    const idsIdx      = argv.indexOf("--ids");
+    const fileIdx     = argv.indexOf("--file");
+    const authorIdx   = argv.indexOf("--author");
+    const minPlaysIdx = argv.indexOf("--min-plays");
+
+    await runQueueTiktok({
+      id:        id ?? undefined,
+      ids:       idsIdx      !== -1 ? argv[idsIdx + 1]                : undefined,
+      file:      fileIdx     !== -1 ? argv[fileIdx + 1]               : undefined,
+      bookmarked: argv.includes("--bookmarked"),
+      liked:     argv.includes("--liked"),
+      author:    authorIdx   !== -1 ? argv[authorIdx + 1]             : undefined,
+      minPlays:  minPlaysIdx !== -1 ? Number(argv[minPlaysIdx + 1])   : undefined,
+      list:      argv.includes("--list"),
+      stats:     argv.includes("--stats"),
+    });
   } else if (pipeline === "scheduler") {
     const { startScheduler } = await import("./scheduler.js");
     startScheduler();
     // node-cron keeps the event loop alive — process stays running until Ctrl+C
   } else {
     console.error(`Unknown pipeline: "${pipeline}"`);
-    console.error("Available pipelines: categorize-idea, plan-idea, analyze-tiktok, scheduler");
+    console.error("Available pipelines: categorize-idea, plan-idea, queue-tiktok, analyze-tiktok, embed-tiktok, scheduler");
     process.exit(1);
   }
 }

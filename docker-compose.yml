@@ -200,6 +200,26 @@ services:
       - "app=whisper"
       - "service=transcription"
 
+  # Portainer — Docker management UI (http://localhost:9001)
+  # Mounts the Docker socket so it can inspect and manage all containers.
+  # Does not need the mcp-network — communicates via socket, not HTTP.
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+
+    ports:
+      - "9001:9000"
+
+    volumes:
+      # Docker socket — gives Portainer visibility into all containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
+    labels:
+      - "app=portainer"
+      - "service=docker-management"
+
 networks:
   mcp-network:
     external: true
@@ -211,4 +231,6 @@ volumes:
   mysql_data:
     driver: local
   ollama_data:
+    driver: local
+  portainer_data:
     driver: local

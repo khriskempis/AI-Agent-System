@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS tiktok_videos (
   is_bookmarked  TINYINT(1)    NOT NULL DEFAULT 0,
   has_local_file TINYINT(1)    NOT NULL DEFAULT 0,    -- MP4 present on this machine
   local_file_path VARCHAR(500) NULL,                  -- absolute WSL path to the MP4
+  queued_for_analysis TINYINT(1) NOT NULL DEFAULT 0, -- manually flagged for analysis
   imported_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (author_id) REFERENCES tiktok_authors(author_id) ON DELETE SET NULL
 );
@@ -49,6 +50,7 @@ CREATE INDEX idx_videos_author     ON tiktok_videos(author_id);
 CREATE INDEX idx_videos_liked      ON tiktok_videos(is_liked);
 CREATE INDEX idx_videos_bookmarked ON tiktok_videos(is_bookmarked);
 CREATE INDEX idx_videos_local      ON tiktok_videos(has_local_file);
+CREATE INDEX idx_videos_queued     ON tiktok_videos(queued_for_analysis);
 CREATE INDEX idx_analysis_video    ON tiktok_analysis(video_id);
 CREATE INDEX idx_analysis_status   ON tiktok_analysis(analysis_status);
 

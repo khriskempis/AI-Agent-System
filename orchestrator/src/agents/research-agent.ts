@@ -17,6 +17,8 @@
 
 import { askJSON } from "../models/claude.js";
 import { getTranscriptForVideo } from "../tiktok-client.js";
+import { embed, buildEmbedText } from "../models/embeddings.js";
+import { search, ensureCollection } from "../qdrant-client.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -134,12 +136,16 @@ async function resolveUrl(url: string): Promise<{
 // Prompts
 // ---------------------------------------------------------------------------
 
-function buildSystemPrompt(isHtml: boolean): string {
+function buildSystemPrompt(isHtml: boolean, priorKnowledge?: string): string {
   const contentNote = isHtml
     ? "The content provided is raw HTML from a web page. Extract the meaningful article/body text and ignore navigation, ads, and boilerplate before analyzing."
     : "The content is plain text (transcript, notes, or article body).";
 
-  return `You are a deep research and content analysis assistant. ${contentNote}
+  const priorNote = priorKnowledge
+    ? `\n\nYou also have access to semantically related content from the user's personal knowledge base:\n${priorKnowledge}\nUse this to identify connections, avoid repeating existing insights, and suggest how this new content builds on or differs from what is already known.`
+    : "";
+
+  return `You are a deep research and content analysis assistant. ${contentNote}${priorNote}
 
 Given content and optional framing context, return a JSON object with:
 - "summary": 2-4 sentence summary of the core content
@@ -190,6 +196,30 @@ export async function research(input: ResearchInput): Promise<ResearchOutput> {
     content = input.content;
   }
 
+  // Query Qdrant for semantically similar content the user already has.
+  // This gives Claude context so it can cross-reference and build on
+  // existing knowledge rather than analyzing in isolation.
+  let priorKnowledge: string | undefined;
+  try {
+    await ensureCollection();
+    const embedText = buildEmbedText({
+      title:   input.metadata?.title ?? input.metadata?.caption ?? null,
+      summary: content.slice(0, 1000), // embed a preview for query efficiency
+    });
+    const vector = await embed(embedText);
+    const similar = await search(vector, 4);
+
+    if (similar.length > 0 && similar[0].score > 0.75) {
+      // Only inject prior knowledge if something meaningfully similar exists
+      priorKnowledge = similar
+        .filter((r) => r.score > 0.75)
+        .map((r) => `- [${r.payload.source_type}] ${r.payload.title ?? "untitled"}: ${r.payload.summary} (similarity: ${r.score.toFixed(2)})`)
+        .join("\n");
+    }
+  } catch {
+    // Qdrant unavailable — continue without prior knowledge, don't fail the research
+  }
+
   // Build user message — include metadata and context if provided
   const parts: string[] = [];
 
@@ -204,7 +234,7 @@ export async function research(input: ResearchInput): Promise<ResearchOutput> {
 
   const result = await askJSON<ResearchOutput>(
     "claude-sonnet-4-6",
-    buildSystemPrompt(isHtml),
+    buildSystemPrompt(isHtml, priorKnowledge),
     userMessage,
     8192  // research output can be detailed — give it room
   );

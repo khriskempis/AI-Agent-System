@@ -45,6 +45,7 @@ orchestrator (TypeScript CLI)
   ├── categorize-idea     → classifies Notion ideas → routes to projects/knowledge/journal
   ├── plan-idea           → generates agent-executable plans for approved projects
   ├── analyze-tiktok      → transcribes local TikTok MP4s → deep analysis via Claude
+  ├── embed-tiktok        → indexes analyzed content into Qdrant for semantic search
   └── scheduler           → runs categorize-idea daily at 09:00 ET
 
 notion-idea-server (port 3001)
@@ -56,15 +57,26 @@ mysql (port 3306)
 
 ollama (port 11434)
   ├── llama3.1:8b         → fast classification (director.ts)
-  └── deepseek-r1:14b     → deep planning (plan-idea.ts)
+  ├── deepseek-r1:14b     → deep planning (plan-idea.ts)
+  └── mxbai-embed-large   → text → 1024-dim vectors for Qdrant
 
 whisper (port 9000)
   └── faster-whisper medium → audio transcription for TikTok MP4s
+
+qdrant (port 6333)
+  └── vector database → semantic search across all analyzed content
+      dashboard: http://localhost:6333/dashboard
+
+portainer (port 9001)
+  └── Docker management UI → container logs, stats, health
+      http://localhost:9001
 ```
 
 **LLM split by workload:**
-- **Local (Ollama)** — fast, cheap, runs on GPU: classification, QA evaluation, planning
+- **Local (Ollama)** — fast, cheap, runs on GPU: classification, QA evaluation, planning, embeddings
 - **Claude Sonnet** — comprehensive reasoning: research, analysis, content repurposing
+
+Full architecture reference: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 
 ---
 
