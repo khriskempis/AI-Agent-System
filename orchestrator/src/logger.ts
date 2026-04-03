@@ -6,6 +6,8 @@ const STAGES = {
   EVALUATE: 5,
   WRITE: 6,
   PLAN: 7,
+  TRANSCRIBE: 8,
+  ANALYZE: 9,
 } as const;
 
 type Stage = keyof typeof STAGES;

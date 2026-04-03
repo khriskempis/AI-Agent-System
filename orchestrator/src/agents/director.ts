@@ -1,4 +1,4 @@
-import { askJSON } from "../models/claude.js";
+import { askJSON } from "../models/ollama.js";
 import type { ParsedIdea } from "../parser.js";
 
 const ALLOWED_TAGS = ["Blog", "Project Idea", "Thought", "Mix of Ideas"] as const;
@@ -63,7 +63,7 @@ export async function classifyIdeas(ideas: ParsedIdea[], tagOptions: Destination
     .join("\n");
 
   const response = await askJSON<{ ideas: IdeaClassification[] }>(
-    "claude-haiku-4-5-20251001",
+    "llama3.1:8b",
     buildClassifySystem(tagOptions),
     `Classify and route these ideas:\n${userMessage}`
   );
@@ -84,7 +84,7 @@ Validator score: ${validationScore}/10
 Validator feedback: ${validationFeedback}`;
 
   return askJSON<EvaluateResult>(
-    "claude-haiku-4-5-20251001",
+    "llama3.1:8b",
     EVALUATE_SYSTEM,
     userMessage
   );
