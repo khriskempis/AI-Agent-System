@@ -1,31 +1,28 @@
 import { logger } from "../logger.js";
+import { runPlanningProcessing } from "../pipelines/run-planning.js";
 import type { AgentInput, AgentOutput } from "./types.js";
 
 /**
- * PlannerAgent — stub implementation.
+ * PlannerAgent — Layer 2 agent that drives the planning pipeline.
  *
- * Will build structured execution plans from NotionAgent output in a future phase
- * (e.g. ordering database item creation tasks, resolving dependencies between ideas).
+ * Delegates all work to runPlanningProcessing(), which fetches all "In progress"
+ * ideas from Notion and generates a structured plan for each via Claude.
  *
- * For now it passes through NotionAgent results so the scheduler chain stays intact.
+ * Does not call NotionAgent directly — that is handled inside run-planning.ts.
  */
 export class PlannerAgent {
   async execute(input: AgentInput): Promise<AgentOutput> {
     const start = Date.now();
 
-    logger.info(`[PlannerAgent] Running (stub) — workflowId: ${input.workflowId}`);
-    logger.info("[PlannerAgent] Full planning logic will be added in a later phase");
+    logger.info(`[PlannerAgent] Starting — workflowId: ${input.workflowId}`);
+
+    const result = await runPlanningProcessing();
 
     return {
+      ...result,
       agentId: "planner-agent",
       phase: "planner",
-      success: true,
       durationMs: Date.now() - start,
-      results: {
-        stub: true,
-        passthrough: input.parameters.notionResults ?? {},
-      },
-      errors: [],
     };
   }
 }

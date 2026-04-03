@@ -291,102 +291,112 @@ export class GenericNotionService {
   /**
    * Update a page with generic property updates
    */
+  /**
+   * Replace all block content on a page with new markdown text.
+   * Deletes existing blocks first, then appends converted markdown blocks.
+   */
+  private async replacePageContent(pageId: string, markdownContent: string): Promise<void> {
+    // Delete all existing blocks
+    const existing = await this.notion.blocks.children.list({ block_id: pageId, page_size: 100 });
+    for (const block of existing.results) {
+      try {
+        await this.notion.blocks.delete({ block_id: (block as any).id });
+      } catch {
+        // Ignore errors on individual block deletes
+      }
+    }
+    // Append new content as blocks
+    const newBlocks = this.convertTextToNotionBlocks(markdownContent);
+    if (newBlocks.length > 0) {
+      // Notion API limits append to 100 blocks at a time
+      for (let i = 0; i < newBlocks.length; i += 100) {
+        await this.notion.blocks.children.append({
+          block_id: pageId,
+          children: newBlocks.slice(i, i + 100) as any,
+        });
+      }
+    }
+  }
+
   async updatePage(pageId: string, config: DatabaseConfig, updates: PageUpdate): Promise<DatabasePage> {
     try {
       console.log('updatePage called with:', {
         id: pageId.substring(0, 8) + '...',
-        updates: updates,
         updateKeys: Object.keys(updates || {}),
         databaseType: config.type
       });
-      
-      // Get the current page to understand its property structure
+
+      // Separate content (page blocks) from property updates
+      const { content: contentValue, ...propertyUpdates } = updates as any;
+
+      // Get the current page and schema
       const currentPage = await this.notion.pages.retrieve({ page_id: pageId });
       const existingProperties = (currentPage as any).properties;
-      
-      const properties: any = {};
-
-      // Get database schema to understand property types
       const schema = await this.getDatabaseSchema(config.id);
       const propertyDetails = schema.propertyDetails || {};
 
-      // Process each update based on property type
-      for (const [propertyName, value] of Object.entries(updates)) {
-        const propConfig = propertyDetails[propertyName];
+      const properties: any = {};
+
+      for (const [key, value] of Object.entries(propertyUpdates)) {
+        // Translate generic key through property mappings (e.g. "status" → "Status")
+        const actualName = config.propertyMappings[key] ?? key;
+        const propConfig = propertyDetails[actualName];
         if (!propConfig) {
-          console.warn(`Property ${propertyName} not found in database schema`);
+          console.warn(`Property "${key}" (resolved: "${actualName}") not found in schema — skipping`);
           continue;
         }
 
         switch ((propConfig as any).type) {
           case 'title':
-            properties[propertyName] = {
-              title: [{ text: { content: String(value) } }],
-            };
+            properties[actualName] = { title: [{ text: { content: String(value) } }] };
             break;
           case 'rich_text':
-            properties[propertyName] = {
-              rich_text: [{ text: { content: String(value) } }],
-            };
+            properties[actualName] = { rich_text: [{ text: { content: String(value) } }] };
             break;
           case 'select':
-            properties[propertyName] = {
-              select: { name: String(value) },
-            };
+            properties[actualName] = { select: { name: String(value) } };
             break;
           case 'status':
-            properties[propertyName] = {
-              status: { name: String(value) },
-            };
+            properties[actualName] = { status: { name: String(value) } };
             break;
           case 'multi_select':
             const tags = Array.isArray(value) ? value : [value];
-            properties[propertyName] = {
-              multi_select: tags.map(tag => ({ name: String(tag) })),
-            };
+            properties[actualName] = { multi_select: tags.map((t: any) => ({ name: String(t) })) };
             break;
           case 'number':
-            properties[propertyName] = {
-              number: Number(value),
-            };
+            properties[actualName] = { number: Number(value) };
             break;
           case 'checkbox':
-            properties[propertyName] = {
-              checkbox: Boolean(value),
-            };
+            properties[actualName] = { checkbox: Boolean(value) };
             break;
           case 'url':
-            properties[propertyName] = {
-              url: String(value),
-            };
+            properties[actualName] = { url: String(value) };
             break;
           case 'email':
-            properties[propertyName] = {
-              email: String(value),
-            };
+            properties[actualName] = { email: String(value) };
             break;
           case 'phone_number':
-            properties[propertyName] = {
-              phone_number: String(value),
-            };
+            properties[actualName] = { phone_number: String(value) };
             break;
           default:
-            console.warn(`Unsupported property type: ${(propConfig as any).type} for property: ${propertyName}`);
+            console.warn(`Unsupported property type: ${(propConfig as any).type} for "${actualName}"`);
         }
       }
 
-      // Only proceed if we have properties to update
-      if (Object.keys(properties).length === 0) {
-        console.warn(`No valid properties found for update on page ${pageId}. Available properties:`, Object.keys(existingProperties));
-        return this.pageToDatabasePage(currentPage, config);
+      // Update properties if any resolved
+      let response: any = currentPage;
+      if (Object.keys(properties).length > 0) {
+        console.log(`Updating page ${pageId.substring(0, 8)}... properties:`, Object.keys(properties));
+        response = await this.notion.pages.update({ page_id: pageId, properties });
+      } else {
+        console.warn(`No valid properties to update on page ${pageId.substring(0, 8)}... Available:`, Object.keys(existingProperties));
       }
 
-      console.log(`Updating page ${pageId} with properties:`, Object.keys(properties));
-
-      const response = await this.notion.pages.update({
-        page_id: pageId,
-        properties,
-      });
+      // Replace page block content if provided
+      if (typeof contentValue === 'string' && contentValue.trim()) {
+        console.log(`Replacing block content on page ${pageId.substring(0, 8)}... (${contentValue.length} chars)`);
+        await this.replacePageContent(pageId, contentValue);
+      }
 
       return await this.pageToDatabasePage(response, config);
     } catch (error) {

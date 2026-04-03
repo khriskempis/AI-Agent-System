@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "@notionhq/client": "^4.0.2",
-    "dotenv": "^17.2.1"
-  }
-}

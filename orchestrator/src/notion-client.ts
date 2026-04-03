@@ -11,10 +11,20 @@ export interface NotionIdea {
   content: string;
 }
 
+/** A page from the projects (or other destination) database, returned by the generic endpoint */
+export interface ProjectPage {
+  id: string;
+  title: string;
+  content: string;
+  properties: Record<string, unknown>;
+  url: string;
+}
+
 export interface UpdateIdeaPayload {
   tags?: string[];
   howManyIdeas?: number;
   status?: NotionIdea["status"];
+  content?: string;
 }
 
 async function request<T>(
