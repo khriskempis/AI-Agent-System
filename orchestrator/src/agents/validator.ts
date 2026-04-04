@@ -1,4 +1,4 @@
-import { askJSON } from "../models/claude.js";
+import { askJSON } from "../models/ollama.js";
 import type { ParsedIdea } from "../parser.js";
 import type { ClassifyResult, DestinationTagOptions } from "./director.js";
 
@@ -39,7 +39,7 @@ Classification:
 ${JSON.stringify(result, null, 2)}`;
 
   return askJSON<ValidationResult>(
-    "claude-haiku-4-5-20251001",
+    "llama3.1:8b",
     buildValidateSystem(tagOptions),
     userMessage
   );

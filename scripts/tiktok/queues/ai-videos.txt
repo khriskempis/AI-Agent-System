@@ -1,14 +1,14 @@
-# Queue file — one TikTok video ID or URL per line
+# Queue file — one TikTok video ID per line
 # Lines starting with # are comments and are ignored
 # Blank lines are also ignored
 #
 # How to use:
 #   npx tsx src/index.ts queue-tiktok --file scripts/tiktok/queues/example.txt
 #
-# Accepted formats — paste URLs directly from TikTok or use bare IDs:
-#   https://www.tiktok.com/@handle/video/7459779252146228497
-#   https://www.tiktok.com/@handle/video/7459779252146228497?is_from_webapp=1&sender_device=pc
-#   7459779252146228497
+# How to find video IDs:
+#   - In DBeaver: browse tiktok.tiktok_videos, copy the video_id column
+#   - From a TikTok URL: https://www.tiktok.com/@handle/video/7459779252146228497
+#                        the ID is the number at the end
 #
 # Create your own files in this folder, e.g.:
 #   scripts/tiktok/queues/business-ideas.txt
@@ -19,3 +19,5 @@
 # 7459779252146228497
 # 7374814047495081248
 # 7450201371153861934
+
+https://www.tiktok.com/@projectnomad42/video/7623179366788386061

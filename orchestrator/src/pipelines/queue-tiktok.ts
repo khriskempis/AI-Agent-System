@@ -54,6 +54,24 @@ export interface QueueTiktokOptions {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Accepts a TikTok video ID or any TikTok URL and returns the bare numeric ID.
+ *
+ * Supported URL forms:
+ *   https://www.tiktok.com/@handle/video/7459779252146228497
+ *   https://www.tiktok.com/@handle/video/7459779252146228497?is_from_webapp=1&...
+ *
+ * Bare IDs (no slash) are returned as-is.
+ */
+function extractVideoId(input: string): string {
+  const match = input.match(/\/video\/(\d+)/);
+  return match ? match[1] : input;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -95,7 +113,7 @@ export async function runQueueTiktok(options: QueueTiktokOptions): Promise<void>
     const rawIds = [
       ...(options.id ? [options.id] : []),
       ...(options.ids ? options.ids.split(",").map((s) => s.trim()) : []),
-    ].filter(Boolean);
+    ].filter(Boolean).map(extractVideoId);
 
     const count = await queueVideos(rawIds);
     console.log(`\nQueued ${count} of ${rawIds.length} video(s).`);
@@ -117,7 +135,8 @@ export async function runQueueTiktok(options: QueueTiktokOptions): Promise<void>
       .readFileSync(filePath, "utf8")
       .split("\n")
       .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#")); // skip blank lines and comments
+      .filter((line) => line && !line.startsWith("#")) // skip blank lines and comments
+      .map(extractVideoId); // accept full TikTok URLs or bare IDs
 
     if (ids.length === 0) {
       logger.warn("File is empty or contains only comments.");

@@ -15,7 +15,7 @@
  *   - director.ts (future — when classifier detects a research-worthy knowledge item)
  */
 
-import { askJSON } from "../models/claude.js";
+import { askJSON } from "../models/ollama.js";
 import { getTranscriptForVideo } from "../tiktok-client.js";
 import { embed, buildEmbedText } from "../models/embeddings.js";
 import { search, ensureCollection } from "../qdrant-client.js";
@@ -41,6 +41,7 @@ export interface ResearchInput {
 }
 
 export interface ResearchOutput {
+  title: string;
   summary: string;
   keyInsights: string[];
   contentOpportunities: string[];
@@ -148,6 +149,7 @@ function buildSystemPrompt(isHtml: boolean, priorKnowledge?: string): string {
   return `You are a deep research and content analysis assistant. ${contentNote}${priorNote}
 
 Given content and optional framing context, return a JSON object with:
+- "title": a concise 5-8 word title describing what this content is actually about (not the TikTok caption — a clean, descriptive label like "Claude Code Project Config Walkthrough" or "AI Agent Trust Infrastructure Pitch")
 - "summary": 2-4 sentence summary of the core content
 - "keyInsights": array of 3-7 specific, actionable insights extracted from the content
 - "contentOpportunities": array of 2-5 concrete content angles (e.g. "long-form blog post on X", "short-form hook: Y quote", "reference guide for Z workflow")
@@ -178,6 +180,7 @@ export async function research(input: ResearchInput): Promise<ResearchOutput> {
     if (!resolved.content) {
       // Unsupported or missing transcript — return a minimal output explaining why
       return {
+        title: "Unsupported or missing content",
         summary: resolved.sourceResolved,
         keyInsights: [],
         contentOpportunities: [],
@@ -233,10 +236,9 @@ export async function research(input: ResearchInput): Promise<ResearchOutput> {
   const userMessage = parts.join("\n");
 
   const result = await askJSON<ResearchOutput>(
-    "claude-sonnet-4-6",
+    "deepseek-r1:14b",
     buildSystemPrompt(isHtml, priorKnowledge),
-    userMessage,
-    8192  // research output can be detailed — give it room
+    userMessage
   );
 
   return { ...result, sourceResolved };

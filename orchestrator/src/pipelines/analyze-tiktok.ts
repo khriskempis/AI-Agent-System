@@ -124,7 +124,7 @@ export async function analyzeTiktokVideo(videoId: string): Promise<void> {
           tiktokUrl:  video.tiktokUrl ?? undefined,
         },
       }),
-    { label: "ANALYZE" }
+    { label: "ANALYZE", maxAttempts: 3 } // cap — each attempt hits Claude Sonnet
   );
 
   logger.success(`Analysis complete — confidence: ${researchResult.confidence}`);
@@ -135,6 +135,7 @@ export async function analyzeTiktokVideo(videoId: string): Promise<void> {
   logger.stage("WRITE", `Saving analysis for video ${videoId}`);
 
   await saveAnalysis(videoId, {
+    title:                researchResult.title,
     transcript:           whisperResult.transcript,
     summary:              researchResult.summary,
     contentType:          researchResult.suggestedContentType,

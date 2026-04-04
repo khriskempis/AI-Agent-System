@@ -136,17 +136,19 @@ export async function runTiktokEmbedding(options: EmbedTiktokOptions = {}): Prom
 
     for (const video of batch) {
       try {
-        // Parse the JSON transcript blob to get keyInsights
+        // Parse the JSON transcript blob to get title, keyInsights, etc.
+        let title: string | null = null;
         let keyInsights: string[] = [];
         try {
           const parsed = JSON.parse(video.transcript);
+          title      = parsed.title      ?? null;
           keyInsights = parsed.keyInsights ?? [];
         } catch {
-          // transcript is raw text (old format) — use as-is
+          // transcript is raw text (old format) — no generated title available
         }
 
         const embedText = buildEmbedText({
-          title:    video.caption,
+          title:    title ?? video.caption,
           summary:  video.summary,
           insights: keyInsights,
         });
@@ -159,7 +161,7 @@ export async function runTiktokEmbedding(options: EmbedTiktokOptions = {}): Prom
           payload: {
             source_type:  "tiktok",
             source_id:    video.videoId,
-            title:        video.caption,
+            title:        title ?? video.caption,
             summary:      video.summary,
             content_type: video.contentType,
             source_url:   video.tiktokUrl,

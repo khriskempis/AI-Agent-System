@@ -71,6 +71,7 @@ async function main(): Promise<void> {
     }
   } else if (pipeline === "embed-tiktok") {
     const { runTiktokEmbedding } = await import("./pipelines/embed-tiktok.js");
+    const { closeTiktokDb } = await import("./tiktok-client.js");
 
     const argv = process.argv;
     const limitIdx = argv.indexOf("--limit");
@@ -78,8 +79,10 @@ async function main(): Promise<void> {
     const reindex = argv.includes("--reindex");
 
     await runTiktokEmbedding({ limit, reindex });
+    await closeTiktokDb();
   } else if (pipeline === "analyze-tiktok") {
     const { runTiktokAnalysis } = await import("./pipelines/analyze-tiktok.js");
+    const { closeTiktokDb } = await import("./tiktok-client.js");
 
     const argv = process.argv;
     const limitIdx = argv.indexOf("--limit");
@@ -94,8 +97,10 @@ async function main(): Promise<void> {
     }
 
     await runTiktokAnalysis({ id: id ?? undefined, limit, all });
+    await closeTiktokDb();
   } else if (pipeline === "queue-tiktok") {
     const { runQueueTiktok } = await import("./pipelines/queue-tiktok.js");
+    const { closeTiktokDb } = await import("./tiktok-client.js");
 
     const argv = process.argv;
     const idsIdx      = argv.indexOf("--ids");
@@ -114,6 +119,7 @@ async function main(): Promise<void> {
       list:      argv.includes("--list"),
       stats:     argv.includes("--stats"),
     });
+    await closeTiktokDb();
   } else if (pipeline === "scheduler") {
     const { startScheduler } = await import("./scheduler.js");
     startScheduler();

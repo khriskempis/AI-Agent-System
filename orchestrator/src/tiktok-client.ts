@@ -45,6 +45,7 @@ export interface TiktokAnalysisRow {
 }
 
 export interface SaveAnalysisPayload {
+  title: string;
   transcript: string;
   summary: string;
   contentType: "blog" | "social" | "reference" | null;
@@ -74,6 +75,13 @@ function getPool(): mysql.Pool {
     logger.info("[tiktok-db] Pool created for tiktok database");
   }
   return pool;
+}
+
+export async function closeTiktokDb(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +277,7 @@ export async function saveAnalysis(
   // transcript column as a structured header above the raw transcript text.
   // This keeps the schema stable without adding columns for every new field.
   const fullTranscript = JSON.stringify({
+    title:               payload.title,
     transcript:          payload.transcript,
     keyInsights:         payload.keyInsights,
     contentOpportunities: payload.contentOpportunities,
